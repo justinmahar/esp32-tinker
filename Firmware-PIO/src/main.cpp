@@ -18,6 +18,7 @@
 #include "holiday_easter_eggs.h"
 #include "milestone_animations.h"
 #include "milestone_helpers.h"
+#include "setup_html.h"
 
 // Hardware config
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
@@ -25,14 +26,15 @@
 #define MAX_DEVICES 4
 #define CS_PIN 5
 
-#define AP_SSID_PREFIX "YouTubeCounter-Setup-"
+#define AP_SSID_PREFIX "ESP32-Tinker-Setup-"
 #define WOKWI_GUEST_SSID "Wokwi-GUEST"
+const char STATS_API_ENDPOINT[] = "https://example.com";
 #define DNS_PORT 53
 #define WIFI_TIMEOUT_MS 15000
 #define WOKWI_SETUP_TIMEOUT_MS 8000
 
-const bool ENABLE_WOKWI_SETUP = false;
-const bool DISABLE_INTRO_AND_WIFI_INFO = false;
+const bool ENABLE_WOKWI_SETUP = true;
+const bool DISABLE_INTRO_AND_WIFI_INFO = true;
 
 // Set true to simulate a WiFi drop after the first successful stats fetch.
 const bool DEBUG_SIMULATE_WIFI_DROP_AFTER_FIRST_STATS_FETCH = false;
@@ -68,6 +70,7 @@ Preferences prefs;
 const unsigned long DISPLAY_UPDATE_MS = 1000;
 const float DEFAULT_STAT_CYCLE_SECONDS = 5.0f;
 const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
+const size_t MAX_SCROLL_MESSAGE_LENGTH = 64;
 const uint8_t STAT_RIGHT_PADDING_COLUMNS = 1;
 const int16_t STAT_SCROLL_OFFSCREEN_MARGIN = 2;
 const int16_t STAT_LABEL_NUMBER_GAP_COLUMNS = 6;
@@ -88,6 +91,12 @@ const uint8_t STAT_SUBSCRIBERS = 1 << 0;
 const uint8_t STAT_VIEWS = 1 << 1;
 const uint8_t STAT_WATCH_HOURS = 1 << 2;
 const uint8_t STAT_ALL = STAT_SUBSCRIBERS | STAT_VIEWS | STAT_WATCH_HOURS;
+const uint8_t DISPLAY_STATS = STAT_ALL;
+const float STAT_CYCLE_SECONDS = DEFAULT_STAT_CYCLE_SECONDS;
+const unsigned int REFRESH_MINUTES = DEFAULT_REFRESH_MINUTES;
+const unsigned int HOLIDAY_REMINDER_MINUTES = DEFAULT_HOLIDAY_REMINDER_MINUTES;
+const bool ANIMATION_BRIGHTNESS_BOOST = false;
+const uint8_t ANIMATION_BRIGHTNESS_BOOST_AMOUNT = 0;
 
 const int STAT_INDEX_SUBSCRIBERS = 0;
 const int STAT_INDEX_VIEWS = 1;
@@ -110,16 +119,12 @@ int current_stat_index = STAT_INDEX_SUBSCRIBERS;
 bool statsLoaded = false;
 StaticJsonDocument<1536> doc;
 
-String saved_ssid, saved_pass, saved_endpoint;
-uint8_t saved_stats = STAT_SUBSCRIBERS;
-unsigned int saved_refresh_minutes = DEFAULT_REFRESH_MINUTES;
-unsigned int saved_holiday_reminder_minutes = DEFAULT_HOLIDAY_REMINDER_MINUTES;
-float saved_stat_cycle_seconds = DEFAULT_STAT_CYCLE_SECONDS;
+String saved_ssid, saved_pass;
+String saved_scroll_message;
 unsigned int saved_scroll_speed_ms = DEFAULT_SCROLL_SPEED_MS;
 uint8_t saved_display_brightness = DEFAULT_DISPLAY_BRIGHTNESS;
-bool saved_animation_brightness_boost = false;
-uint8_t saved_animation_brightness_boost_amount = 0;
 bool configMode = false;
+bool scrollMessageActive = false;
 bool captivePortalActive = false;
 char setupMacSuffix[5] = "";
 char setupScrollBuffer[48] = "";
@@ -130,6 +135,8 @@ String getSetupApSsid();
 void runBootAnimation();
 void initSetupDisplay();
 void updateSetupDisplay();
+void startScrollMessageDisplay();
+void tickScrollMessageDisplay();
 String html_escape(String value);
 bool fetchStats();
 void showProjectedStat();
@@ -154,381 +161,40 @@ double getProjectedFractionalStatValue(double baselineStartedAtUnix,
                                        double increasePer28Days,
                                        double currentUnixTimestamp);
 
-// ─── Config portal HTML
-// ───────────────────────────────────────────────────────
-const char CONFIG_HTML[] PROGMEM = R"rawhtml(
-<!DOCTYPE html><html><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Stats Counter Setup</title>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#111;color:#e8e8e8;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;padding:1rem}
-  .card{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:14px;width:100%;max-width:360px;overflow:hidden}
-  .header{background:#0d0d0d;padding:18px 22px;border-bottom:1px solid #222}
-  .logo{display:flex;align-items:center;gap:10px}
-  .dot{width:28px;height:28px;background:#22c55e;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#0a2e18}
-  h1{font-size:15px;font-weight:600;color:#f0f0f0}
-  .sub{font-size:12px;color:#555;margin-top:3px}
-  .body{padding:20px 22px 24px;display:flex;flex-direction:column;gap:13px}
-  .status{background:#0a1a10;border:1px solid #1a3a20;border-radius:8px;padding:8px 12px;font-size:12px;color:#4ade80;display:flex;align-items:center;gap:8px}
-  .dot-green{width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0}
-  .section{font-size:11px;font-weight:600;color:#555;text-transform:uppercase;letter-spacing:.05em}
-  label{font-size:11px;font-weight:600;color:#777;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:4px}
-  input[type=text],input[type=password],input[type=url],input[type=number]{width:100%;background:#1c1c1c;border:1px solid #2e2e2e;border-radius:8px;padding:9px 12px;font-size:13px;color:#e8e8e8;outline:none}
-  input[type=text]:focus,input[type=password]:focus,input[type=url]:focus,input[type=number]:focus{border-color:#22c55e}
-  .checks{display:flex;flex-direction:column;gap:7px}
-  .check{display:flex;align-items:center;gap:8px;background:#1c1c1c;border:1px solid #2e2e2e;border-radius:8px;padding:9px 12px;font-size:13px;color:#e8e8e8}
-  .check input{accent-color:#22c55e}
-  .check span{font-size:13px;color:#e8e8e8;text-transform:none;letter-spacing:0}
-  input::placeholder{color:#444}
-  .hint{font-size:11px;color:#555;margin-top:3px}
-  .divider{height:1px;background:#222}
-  .btn{width:100%;background:#22c55e;color:#0a2e18;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px}
-  .btn:hover{background:#1daa50}
-  .btn-ota{width:100%;background:#1c1c1c;color:#e8e8e8;border:1px solid #2e2e2e;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;margin-top:4px}
-  .btn-ota:hover{background:#252525}
-  .msg{font-size:13px;text-align:center;padding:8px;border-radius:8px;display:none}
-  .msg.ok{background:#0a1a10;color:#4ade80;border:1px solid #1a3a20;display:block}
-  .msg.err{background:#1a0a0a;color:#f87171;border:1px solid #3a1a1a;display:block}
-  .msg.info{background:#0a0e1a;color:#60a5fa;border:1px solid #1a2a3a;display:block}
-  .progress-wrap{background:#1c1c1c;border-radius:8px;height:8px;overflow:hidden;display:none}
-  .progress-wrap.show{display:block}
-  .progress-bar{height:100%;width:0%;background:#22c55e;border-radius:8px;transition:width .2s}
-  input[type=file]{width:100%;background:#1c1c1c;border:1px solid #2e2e2e;border-radius:8px;padding:8px 12px;font-size:13px;color:#888;outline:none;cursor:pointer}
-  input[type=file]::file-selector-button{background:#22c55e;color:#0a2e18;border:none;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;margin-right:10px}
-  .btn-scan{width:100%;background:#1c1c1c;color:#e8e8e8;border:1px solid #2e2e2e;border-radius:8px;padding:9px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
-  .btn-scan:hover{background:#252525}
-  .btn-scan.spinning span{display:inline-block;animation:spin .8s linear infinite}
-  @keyframes spin{to{transform:rotate(360deg)}}
-  .net-list{display:flex;flex-direction:column;gap:6px;display:none}
-  .net-list.show{display:flex}
-  .net-item{display:flex;align-items:center;justify-content:space-between;background:#1c1c1c;border:1px solid #2e2e2e;border-radius:8px;padding:9px 12px;cursor:pointer;font-size:13px;transition:border-color .15s}
-  .net-item:hover{border-color:#22c55e}
-  .net-item.active{border-color:#22c55e;background:#0a1a10}
-  .net-name{color:#e8e8e8;font-weight:500}
-  .net-meta{display:flex;align-items:center;gap:8px}
-  .net-lock{font-size:11px;color:#555}
-  .net-bars{display:flex;align-items:flex-end;gap:2px;height:14px}
-  .net-bars span{width:3px;background:#555;border-radius:1px}
-  .net-bars span.lit{background:#22c55e}
-  .pw-wrap{position:relative}
-  .pw-wrap input{padding-right:38px}
-  .eye-btn{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#555;font-size:16px;line-height:1;padding:0}
-  .eye-btn:hover{color:#aaa}
-</style></head><body>
-<div class="card">
-  <div class="header">
-    <div class="logo"><div class="dot">&#9654;</div><div><h1>Stats Counter</h1><div class="sub">Device setup</div></div></div>
-  </div>
-  <div class="body">
-    <div class="status"><div class="dot-green"></div>Connected &mdash; IP_PLACEHOLDER</div>
-    <div class="section">Wi-Fi</div>
-    <button class="btn-scan" id="scan-btn" onclick="scanNetworks()"><span>&#8635;</span> Scan for networks</button>
-    <div class="net-list" id="net-list"></div>
-    <div><label>Network name (SSID)</label><input type="text" id="ssid" placeholder="Leave blank to keep saved" value="SSID_PLACEHOLDER"></div>
-    <div><label>Password <span style="color:#555;font-weight:400;text-transform:none">(leave blank to keep saved)</span></label><div class="pw-wrap"><input type="password" id="pw" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"><button class="eye-btn" type="button" onclick="toggleEye('pw','eye-pw')"><span id="eye-pw">&#128065;</span></button></div></div>
-    <div class="divider"></div>
-    <div class="section">Stats API</div>
-    <div>
-      <label>Stats API endpoint</label>
-      <input type="url" id="endpoint" placeholder="https://your-domain.example/api/stats" value="ENDPOINT_PLACEHOLDER">
-      <div class="hint">Must return the documented stats JSON shape.</div>
-    </div>
-    <div>
-      <label>Stats to show</label>
-      <div class="checks">
-        <label class="check"><input type="checkbox" id="stat-subs" SUBS_CHECKED><span>Subscribers</span></label>
-        <label class="check"><input type="checkbox" id="stat-views" VIEWS_CHECKED><span>Views</span></label>
-        <label class="check"><input type="checkbox" id="stat-hours" HOURS_CHECKED><span>Watch hours</span></label>
-      </div>
-      <div class="hint">Multiple selections cycle on the matrix.</div>
-    </div>
-    <div>
-      <label>Scroll speed (ms)</label>
-      <input type="number" id="scroll-speed" min="1" step="1" value="SCROLL_SPEED_PLACEHOLDER">
-      <div class="hint">Milliseconds between scroll steps when stats animate onto the display.</div>
-    </div>
-    <div>
-      <label>Value display time (seconds)</label>
-      <input type="number" id="stat-cycle" step="any" value="STAT_CYCLE_PLACEHOLDER">
-      <div class="hint">How long each stat is shown when cycling (scroll-in and value).</div>
-    </div>
-    <div class="divider"></div>
-    <div class="section">Display</div>
-    <div>
-      <label>Brightness</label>
-      <input type="number" id="brightness" min="0" max="15" step="1" value="BRIGHTNESS_PLACEHOLDER">
-      <div class="hint">Baseline brightness for all text and animations.</div>
-    </div>
-    <div class="divider"></div>
-    <div class="section">Animations</div>
-    <div>
-      <label class="check"><input type="checkbox" id="anim-boost" ANIM_BOOST_CHECKED><span>Animation brightness boost</span></label>
-      <div class="hint">Animations start from the display baseline; enabling boost adds the amount below.</div>
-    </div>
-    <div>
-      <label>Animation brightness boost amount</label>
-      <input type="number" id="anim-boost-amount" min="0" max="15" step="1" value="ANIM_BOOST_AMOUNT_PLACEHOLDER">
-      <div class="hint">Adds 0-15 brightness steps to normalized animation frames.</div>
-    </div>
-    <div>
-      <label>Holiday reminder interval (minutes)</label>
-      <input type="number" id="holiday-reminder" min="0" max="1440" step="1" value="HOLIDAY_REMINDER_PLACEHOLDER">
-      <div class="hint">How often holiday messages replay on matching calendar days. Use 0 to disable holidays.</div>
-    </div>
-    <div>
-      <label>Refresh rate (minutes)</label>
-      <input type="number" id="refresh" min="1" max="1440" step="1" value="REFRESH_PLACEHOLDER">
-      <div class="hint">The display projects values every second between API refreshes.</div>
-    </div>
-    <div id="msg" class="msg"></div>
-    <button class="btn" onclick="save()">Save &amp; connect</button>
-    <div class="divider"></div>
-    <div class="section">Firmware update</div>
-    <div>
-      <label>Firmware .bin file</label>
-      <input type="file" id="binfile" accept=".bin">
-      <div class="hint">PlatformIO build output: .pio/build/esp32dev/firmware.bin</div>
-    </div>
-    <div class="progress-wrap" id="prog-wrap"><div class="progress-bar" id="prog-bar"></div></div>
-    <div id="ota-msg" class="msg"></div>
-    <button class="btn-ota" onclick="uploadFirmware()">Upload firmware</button>
-  </div>
-</div>
-<script>
-var SETUP_STORAGE_KEY='statsCounterSetup';
-function persistSetupForm(){
-  try{
-    localStorage.setItem(SETUP_STORAGE_KEY,JSON.stringify({
-      ssid:document.getElementById('ssid').value,
-      endpoint:document.getElementById('endpoint').value,
-      statSubs:document.getElementById('stat-subs').checked,
-      statViews:document.getElementById('stat-views').checked,
-      statHours:document.getElementById('stat-hours').checked,
-      scrollSpeed:document.getElementById('scroll-speed').value,
-      statCycle:document.getElementById('stat-cycle').value,
-      brightness:document.getElementById('brightness').value,
-      animationBoost:document.getElementById('anim-boost').checked,
-      animationBoostAmount:document.getElementById('anim-boost-amount').value,
-      holidayReminder:document.getElementById('holiday-reminder').value,
-      refresh:document.getElementById('refresh').value
-    }));
-  }catch(e){}
-}
-function restoreSetupForm(){
-  try{
-    var raw=localStorage.getItem(SETUP_STORAGE_KEY);
-    if(!raw)return;
-    var d=JSON.parse(raw);
-    if(d.ssid!=null)document.getElementById('ssid').value=d.ssid;
-    if(d.endpoint!=null)document.getElementById('endpoint').value=d.endpoint;
-    if(d.statSubs!=null)document.getElementById('stat-subs').checked=!!d.statSubs;
-    if(d.statViews!=null)document.getElementById('stat-views').checked=!!d.statViews;
-    if(d.statHours!=null)document.getElementById('stat-hours').checked=!!d.statHours;
-    if(d.scrollSpeed!=null)document.getElementById('scroll-speed').value=d.scrollSpeed;
-    if(d.statCycle!=null)document.getElementById('stat-cycle').value=d.statCycle;
-    if(d.brightness!=null)document.getElementById('brightness').value=d.brightness;
-    if(d.animationBoost!=null)document.getElementById('anim-boost').checked=!!d.animationBoost;
-    if(d.animationBoostAmount!=null)document.getElementById('anim-boost-amount').value=d.animationBoostAmount;
-    if(d.holidayReminder!=null)document.getElementById('holiday-reminder').value=d.holidayReminder;
-    if(d.refresh!=null)document.getElementById('refresh').value=d.refresh;
-  }catch(e){}
-}
-function bindSetupPersist(){
-  ['ssid','endpoint','scroll-speed','stat-cycle','brightness','anim-boost-amount','holiday-reminder','refresh'].forEach(function(id){
-    document.getElementById(id).addEventListener('input',persistSetupForm);
-  });
-  ['stat-subs','stat-views','stat-hours','anim-boost'].forEach(function(id){
-    document.getElementById(id).addEventListener('change',persistSetupForm);
-  });
-}
-function barsHtml(rssi){
-  var lvl=rssi>-55?4:rssi>-65?3:rssi>-75?2:1;
-  var h='<div class="net-bars">';
-  var heights=[4,7,10,14];
-  for(var i=0;i<4;i++){h+='<span style="height:'+heights[i]+'px"'+(i<lvl?' class="lit"':'')+' ></span>';}
-  return h+'</div>';
-}
-function scanNetworks(){
-  var btn=document.getElementById('scan-btn');
-  var list=document.getElementById('net-list');
-  btn.classList.add('spinning');
-  btn.disabled=true;
-  list.className='net-list';
-  list.innerHTML='';
-  fetch('/scan').then(r=>r.json()).then(nets=>{
-    btn.classList.remove('spinning');
-    btn.disabled=false;
-    if(!nets.length){list.innerHTML='<div style="font-size:12px;color:#555;text-align:center">No networks found</div>';list.className='net-list show';return;}
-    list.innerHTML=nets.map(function(n){
-      return '<div class="net-item" onclick="pickNet(this,\''+n.ssid.replace(/'/g,"\\'")+'\')">'
-        +'<span class="net-name">'+n.ssid+'</span>'
-        +'<span class="net-meta">'+barsHtml(n.rssi)+(n.secure?'<span class="net-lock">&#128274;</span>':'')+'</span>'
-        +'</div>';
-    }).join('');
-    list.className='net-list show';
-  }).catch(function(){
-    btn.classList.remove('spinning');
-    btn.disabled=false;
-  });
-}
-function pickNet(el,ssid){
-  document.querySelectorAll('.net-item').forEach(function(x){x.classList.remove('active');});
-  el.classList.add('active');
-  document.getElementById('ssid').value=ssid;
-  persistSetupForm();
-  document.getElementById('pw').focus();
-}
-function toggleEye(inputId,iconId){
-  var inp=document.getElementById(inputId);
-  var ico=document.getElementById(iconId);
-  if(inp.type==='password'){inp.type='text';ico.textContent='\uD83D\uDE48';}
-  else{inp.type='password';ico.textContent='\uD83D\uDC41';}
-}
-function save(){
-  var s=document.getElementById('ssid').value.trim();
-  var p=document.getElementById('pw').value;
-  var e=document.getElementById('endpoint').value.trim();
-  var r=parseInt(document.getElementById('refresh').value,10);
-  var scrollSpeed=parseInt(document.getElementById('scroll-speed').value,10);
-  var statCycle=parseFloat(document.getElementById('stat-cycle').value);
-  var brightness=parseInt(document.getElementById('brightness').value,10);
-  var animBoost=document.getElementById('anim-boost').checked;
-  var animBoostAmount=parseInt(document.getElementById('anim-boost-amount').value,10);
-  var holidayReminder=parseInt(document.getElementById('holiday-reminder').value,10);
-  var stats=0;
-  if(document.getElementById('stat-subs').checked)stats|=1;
-  if(document.getElementById('stat-views').checked)stats|=2;
-  if(document.getElementById('stat-hours').checked)stats|=4;
-  var msg=document.getElementById('msg');
-  if(!e){msg.className='msg err';msg.textContent='Stats API endpoint is required.';return;}
-  if(!/^https?:\/\//i.test(e)){msg.className='msg err';msg.textContent='Endpoint must start with http:// or https://';return;}
-  if(!stats){msg.className='msg err';msg.textContent='Choose at least one stat to show.';return;}
-  if(!scrollSpeed||scrollSpeed<=0){msg.className='msg err';msg.textContent='Scroll speed must be greater than 0.';return;}
-  if(!statCycle||statCycle<=0){msg.className='msg err';msg.textContent='Value display time must be greater than 0.';return;}
-  if(isNaN(brightness)||brightness<0||brightness>15){msg.className='msg err';msg.textContent='Brightness must be 0-15.';return;}
-  if(isNaN(animBoostAmount)||animBoostAmount<0||animBoostAmount>15){msg.className='msg err';msg.textContent='Animation brightness boost amount must be 0-15.';return;}
-  if(isNaN(holidayReminder)||holidayReminder<0){msg.className='msg err';msg.textContent='Holiday reminder interval must be 0 or greater.';return;}
-  if(!r||r<1){msg.className='msg err';msg.textContent='Refresh rate must be at least 1 minute.';return;}
-  persistSetupForm();
-  msg.className='msg ok';msg.textContent='Saving\u2026 device will reboot and connect.';
-  fetch('/save',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
-    body:'ssid='+encodeURIComponent(s)+'&pass='+encodeURIComponent(p)+'&endpoint='+encodeURIComponent(e)+'&stats='+stats+'&refresh='+r+'&scrollSpeed='+scrollSpeed+'&statCycle='+statCycle+'&brightness='+brightness+'&animBoost='+(animBoost?1:0)+'&animBoostAmount='+animBoostAmount+'&holidayReminder='+holidayReminder})
-  .then(r=>r.text()).then(t=>{msg.textContent=t;});
-}
-function uploadFirmware(){
-  var file=document.getElementById('binfile').files[0];
-  var omsg=document.getElementById('ota-msg');
-  var bar=document.getElementById('prog-bar');
-  var wrap=document.getElementById('prog-wrap');
-  if(!file){omsg.className='msg err';omsg.textContent='Select a .bin file first.';return;}
-  if(!file.name.endsWith('.bin')){omsg.className='msg err';omsg.textContent='File must be a .bin';return;}
-  var xhr=new XMLHttpRequest();
-  xhr.open('POST','/update',true);
-  xhr.upload.onprogress=function(e){
-    if(e.lengthComputable){
-      var pct=Math.round(e.loaded/e.total*100);
-      wrap.className='progress-wrap show';
-      bar.style.width=pct+'%';
-      omsg.className='msg info';
-      omsg.textContent='Uploading\u2026 '+pct+'%';
-    }
-  };
-  xhr.onload=function(){
-    if(xhr.status===200){
-      omsg.className='msg ok';
-      omsg.textContent='Update complete! Rebooting\u2026';
-      bar.style.width='100%';
-    } else {
-      omsg.className='msg err';
-      omsg.textContent='Update failed: '+xhr.responseText;
-    }
-  };
-  xhr.onerror=function(){omsg.className='msg err';omsg.textContent='Upload error. Check connection.';};
-  var fd=new FormData();
-  fd.append('firmware',file,file.name);
-  xhr.send(fd);
-}
-restoreSetupForm();
-bindSetupPersist();
-</script>
-</body></html>
-)rawhtml";
-
 // ─── Helpers
 // ──────────────────────────────────────────────────────────────────
 void loadPrefs() {
   prefs.begin("ytcounter", true);
   saved_ssid = prefs.getString("ssid", "");
   saved_pass = prefs.getString("pass", "");
-  saved_endpoint = prefs.getString("endpoint", "");
-  saved_stats = prefs.getUChar("stats", STAT_SUBSCRIBERS) & STAT_ALL;
-  saved_refresh_minutes = prefs.getUInt("refresh", DEFAULT_REFRESH_MINUTES);
-  saved_holiday_reminder_minutes =
-      prefs.getUInt("holidayMin", DEFAULT_HOLIDAY_REMINDER_MINUTES);
-  saved_stat_cycle_seconds = prefs.getFloat("statCycle", 0);
-  if (saved_stat_cycle_seconds <= 0) {
-    unsigned long legacyStatCycle = prefs.getUInt("statCycle", 0);
-    saved_stat_cycle_seconds = legacyStatCycle > 0 ? (float)legacyStatCycle
-                                                   : DEFAULT_STAT_CYCLE_SECONDS;
-  }
+  saved_scroll_message = prefs.getString("scrollMsg", "");
   saved_scroll_speed_ms = prefs.getUInt("scrollSpeed", 0);
   if (saved_scroll_speed_ms == 0) {
     saved_scroll_speed_ms = DEFAULT_SCROLL_SPEED_MS;
   }
   saved_display_brightness =
       prefs.getUChar("brightness", DEFAULT_DISPLAY_BRIGHTNESS);
-  saved_animation_brightness_boost = prefs.getBool("animBoost", false);
-  saved_animation_brightness_boost_amount = prefs.getUChar("animBoostAmt", 0);
   prefs.end();
 
-  if (saved_stats == 0)
-    saved_stats = STAT_SUBSCRIBERS;
-  if (saved_refresh_minutes < 1)
-    saved_refresh_minutes = DEFAULT_REFRESH_MINUTES;
-  if (saved_refresh_minutes > MAX_REFRESH_MINUTES)
-    saved_refresh_minutes = MAX_REFRESH_MINUTES;
-  if (saved_holiday_reminder_minutes > MAX_HOLIDAY_REMINDER_MINUTES)
-    saved_holiday_reminder_minutes = MAX_HOLIDAY_REMINDER_MINUTES;
   if (saved_display_brightness > 15)
     saved_display_brightness = 15;
-  if (saved_animation_brightness_boost_amount > 15)
-    saved_animation_brightness_boost_amount = 15;
 
   Serial.print("Config loaded: ssid=");
   Serial.print(saved_ssid.length() ? saved_ssid : "(empty)");
-  Serial.print(", endpoint=");
-  Serial.print(saved_endpoint.length() ? "set" : "empty");
-  Serial.print(", stats=");
-  Serial.print(saved_stats);
+  Serial.print(", scrollMsg=");
+  Serial.print(saved_scroll_message.length() ? saved_scroll_message : "(empty)");
   Serial.print(", brightness=");
-  Serial.print(saved_display_brightness);
-  Serial.print(", animBoost=");
-  Serial.print(saved_animation_brightness_boost ? "on" : "off");
-  Serial.print(", animBoostAmount=");
-  Serial.print(saved_animation_brightness_boost_amount);
-  Serial.print(", holidayReminder=");
-  Serial.println(saved_holiday_reminder_minutes);
+  Serial.println(saved_display_brightness);
 }
 
-void savePrefs(String ssid, String pass, String endpoint, uint8_t stats,
-               unsigned int refreshMinutes, float statCycleSeconds,
-               unsigned int scrollSpeedMs, uint8_t displayBrightness,
-               bool animationBrightnessBoost,
-               uint8_t animationBrightnessBoostAmount,
-               unsigned int holidayReminderMinutes) {
+void savePrefs(String ssid, String pass, const String &scrollMessage,
+               unsigned int scrollSpeedMs, uint8_t displayBrightness) {
   prefs.begin("ytcounter", false);
   prefs.putString("ssid", ssid);
   prefs.putString("pass", pass);
-  prefs.putString("endpoint", endpoint);
-  prefs.putUChar("stats", stats);
-  prefs.putUInt("refresh", refreshMinutes);
-  prefs.putFloat("statCycle", statCycleSeconds);
+  prefs.putString("scrollMsg", scrollMessage);
   prefs.putUInt("scrollSpeed", scrollSpeedMs);
   prefs.putUChar("brightness", displayBrightness);
-  prefs.putBool("animBoost", animationBrightnessBoost);
-  prefs.putUChar("animBoostAmt", animationBrightnessBoostAmount);
-  prefs.putUInt("holidayMin", holidayReminderMinutes);
   prefs.end();
 }
 
@@ -542,27 +208,14 @@ String html_escape(String value) {
 }
 
 String buildPage() {
-  String page = String(CONFIG_HTML);
+  String page = String(FPSTR(SETUP_PORTAL_HTML));
   String ip =
       configMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
   page.replace("IP_PLACEHOLDER", ip);
   page.replace("SSID_PLACEHOLDER", html_escape(saved_ssid));
-  page.replace("ENDPOINT_PLACEHOLDER", html_escape(saved_endpoint));
-  page.replace("SUBS_CHECKED",
-               (saved_stats & STAT_SUBSCRIBERS) ? "checked" : "");
-  page.replace("VIEWS_CHECKED", (saved_stats & STAT_VIEWS) ? "checked" : "");
-  page.replace("HOURS_CHECKED",
-               (saved_stats & STAT_WATCH_HOURS) ? "checked" : "");
-  page.replace("REFRESH_PLACEHOLDER", String(saved_refresh_minutes));
-  page.replace("STAT_CYCLE_PLACEHOLDER", String(saved_stat_cycle_seconds, 3));
+  page.replace("SCROLL_MESSAGE_PLACEHOLDER", html_escape(saved_scroll_message));
   page.replace("SCROLL_SPEED_PLACEHOLDER", String(saved_scroll_speed_ms));
   page.replace("BRIGHTNESS_PLACEHOLDER", String(saved_display_brightness));
-  page.replace("ANIM_BOOST_CHECKED",
-               saved_animation_brightness_boost ? "checked" : "");
-  page.replace("ANIM_BOOST_AMOUNT_PLACEHOLDER",
-               String(saved_animation_brightness_boost_amount));
-  page.replace("HOLIDAY_REMINDER_PLACEHOLDER",
-               String(saved_holiday_reminder_minutes));
   return page;
 }
 
@@ -571,39 +224,10 @@ String buildPage() {
 void handleRoot() { server.send(200, "text/html", buildPage()); }
 
 void handleSave() {
-  if (!server.hasArg("endpoint")) {
-    server.send(400, "text/plain", "Stats API endpoint is required.");
-    return;
-  }
-
-  String endpoint = server.arg("endpoint");
-  endpoint.trim();
-  if (endpoint.length() == 0) {
-    server.send(400, "text/plain", "Stats API endpoint is required.");
-    return;
-  }
-  if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
-    server.send(400, "text/plain",
-                "Endpoint must start with http:// or https://");
-    return;
-  }
-
-  uint8_t stats = server.arg("stats").toInt() & STAT_ALL;
-  if (stats == 0) {
-    server.send(400, "text/plain", "Choose at least one stat to show.");
-    return;
-  }
-
-  int refreshMinutes = server.arg("refresh").toInt();
-  if (refreshMinutes < 1)
-    refreshMinutes = 1;
-  if (refreshMinutes > MAX_REFRESH_MINUTES)
-    refreshMinutes = MAX_REFRESH_MINUTES;
-
-  float statCycleSeconds = server.arg("statCycle").toFloat();
-  if (statCycleSeconds <= 0) {
-    server.send(400, "text/plain",
-                "Value display time must be greater than 0.");
+  String scrollMessage = server.arg("scrollMessage");
+  scrollMessage.trim();
+  if (scrollMessage.length() > MAX_SCROLL_MESSAGE_LENGTH) {
+    server.send(400, "text/plain", "Scroll message is too long.");
     return;
   }
 
@@ -621,23 +245,6 @@ void handleSave() {
     displayBrightness = 15;
   }
 
-  bool animationBrightnessBoost = server.arg("animBoost").toInt() != 0;
-  int animationBrightnessBoostAmount = server.arg("animBoostAmount").toInt();
-  if (animationBrightnessBoostAmount < 0) {
-    animationBrightnessBoostAmount = 0;
-  }
-  if (animationBrightnessBoostAmount > 15) {
-    animationBrightnessBoostAmount = 15;
-  }
-
-  int holidayReminderMinutes = server.arg("holidayReminder").toInt();
-  if (holidayReminderMinutes < 0) {
-    holidayReminderMinutes = 0;
-  }
-  if (holidayReminderMinutes > MAX_HOLIDAY_REMINDER_MINUTES) {
-    holidayReminderMinutes = MAX_HOLIDAY_REMINDER_MINUTES;
-  }
-
   String new_ssid = server.arg("ssid");
   new_ssid.trim();
   if (new_ssid.length() == 0) {
@@ -650,10 +257,8 @@ void handleSave() {
   String new_pass = server.arg("pass");
   if (new_pass.length() == 0)
     new_pass = saved_pass;
-  savePrefs(new_ssid, new_pass, endpoint, stats, refreshMinutes,
-            statCycleSeconds, scrollSpeedMs, (uint8_t)displayBrightness,
-            animationBrightnessBoost, (uint8_t)animationBrightnessBoostAmount,
-            (unsigned int)holidayReminderMinutes);
+  savePrefs(new_ssid, new_pass, scrollMessage, scrollSpeedMs,
+            (uint8_t)displayBrightness);
   server.send(200, "text/plain", "Saved! Rebooting now...");
   delay(1500);
   ESP.restart();
@@ -724,7 +329,7 @@ void registerRoutes() {
 }
 
 bool isStatSelected(int index) {
-  return (saved_stats & STAT_MASKS[index]) != 0;
+  return (DISPLAY_STATS & STAT_MASKS[index]) != 0;
 }
 
 int selectedStatsCount() {
@@ -867,8 +472,8 @@ double getProjectedStatValue(int statIndex, double currentUnixTimestamp) {
   if (statIndex == STAT_INDEX_WATCH_HOURS) {
     return getProjectedFractionalStatValue(
         stat_baseline_started_at_unix[statIndex],
-        stat_baseline_values[statIndex],
-        stat_increase_per_28_days[statIndex], currentUnixTimestamp);
+        stat_baseline_values[statIndex], stat_increase_per_28_days[statIndex],
+        currentUnixTimestamp);
   }
 
   return getProjectedWholeStatValue(
@@ -881,13 +486,13 @@ bool fetchStats() {
   bool beginOk = false;
 
   Serial.print("Fetching stats: ");
-  Serial.println(saved_endpoint);
+  Serial.println(STATS_API_ENDPOINT);
 
-  if (saved_endpoint.startsWith("https://")) {
+  if (String(STATS_API_ENDPOINT).startsWith("https://")) {
     client.setInsecure();
-    beginOk = http.begin(client, saved_endpoint);
+    beginOk = http.begin(client, STATS_API_ENDPOINT);
   } else {
-    beginOk = http.begin(saved_endpoint);
+    beginOk = http.begin(STATS_API_ENDPOINT);
   }
 
   if (!beginOk) {
@@ -2014,8 +1619,8 @@ static void bootAnimFinale(MD_MAX72XX *matrix, uint16_t colStart,
         }
       }
     }
-    Display.setIntensity(animationDisplayIntensity(
-        max(0, 11 - abs(sweep - width / 2) / 3)));
+    Display.setIntensity(
+        animationDisplayIntensity(max(0, 11 - abs(sweep - width / 2) / 3)));
     matrix->update();
     delay(20);
   }
@@ -2081,6 +1686,26 @@ void updateSetupDisplay() {
   }
 }
 
+void startScrollMessageDisplay() {
+  if (!scrollMessageActive) {
+    return;
+  }
+
+  Display.setTextAlignment(PA_LEFT);
+  Display.displayScroll(saved_scroll_message.c_str(), PA_LEFT, PA_SCROLL_LEFT,
+                        saved_scroll_speed_ms);
+}
+
+void tickScrollMessageDisplay() {
+  if (!scrollMessageActive) {
+    return;
+  }
+
+  if (Display.displayAnimate()) {
+    startScrollMessageDisplay();
+  }
+}
+
 void startConfigPortal() {
   configMode = true;
 
@@ -2114,34 +1739,41 @@ void setup() {
 
   loadPrefs();
   animationBrightnessConfigure(saved_display_brightness,
-                               saved_animation_brightness_boost,
-                               saved_animation_brightness_boost_amount);
+                               ANIMATION_BRIGHTNESS_BOOST,
+                               ANIMATION_BRIGHTNESS_BOOST_AMOUNT);
   Display.setIntensity(displayBaselineIntensity());
 
+  scrollMessageActive = saved_scroll_message.length() > 0;
+  if (scrollMessageActive) {
+    startScrollMessageDisplay();
+  }
+
   randomSeed(esp_random());
-  if (!DISABLE_INTRO_AND_WIFI_INFO) {
-    runBootAnimation();
-  }
-  if (RUN_SINGLE_MILESTONE_PREVIEW_ON_BOOT) {
-    runMilestoneAnimation(Display, SINGLE_MILESTONE_PREVIEW_BOOT);
-  }
-  if (PREVIEW_MILESTONES) {
-    for (MilestoneAnimation anim : MILESTONE_BOOT_PREVIEW) {
-      runMilestoneAnimation(Display, anim);
+  if (!scrollMessageActive) {
+    if (!DISABLE_INTRO_AND_WIFI_INFO) {
+      runBootAnimation();
+    }
+    if (RUN_SINGLE_MILESTONE_PREVIEW_ON_BOOT) {
+      runMilestoneAnimation(Display, SINGLE_MILESTONE_PREVIEW_BOOT);
+    }
+    if (PREVIEW_MILESTONES) {
+      for (MilestoneAnimation anim : MILESTONE_BOOT_PREVIEW) {
+        runMilestoneAnimation(Display, anim);
+      }
+    }
+    if (PREVIEW_HOLIDAYS) {
+      runHolidayPreviewCycle(Display);
+    } else if (RUN_HOLIDAY_PREVIEW_ON_BOOT) {
+      runHolidayEasterEgg(Display, HOLIDAY_PREVIEW_BOOT);
     }
   }
-  if (PREVIEW_HOLIDAYS) {
-    runHolidayPreviewCycle(Display);
-  } else if (RUN_HOLIDAY_PREVIEW_ON_BOOT) {
-    runHolidayEasterEgg(Display, HOLIDAY_PREVIEW_BOOT);
-  }
 
-  bool hasCredentials =
-      (saved_ssid.length() > 0 && saved_endpoint.length() > 0 &&
-       (saved_stats & STAT_ALL) != 0);
+  bool hasCredentials = saved_ssid.length() > 0;
 
   if (hasCredentials) {
-    Display.print(" WiFi...");
+    if (!scrollMessageActive) {
+      Display.print(" WiFi...");
+    }
     Serial.print("Connecting to WiFi: ");
     Serial.println(saved_ssid);
 
@@ -2149,10 +1781,17 @@ void setup() {
     WiFi.begin(saved_ssid.c_str(), saved_pass.c_str());
 
     unsigned long start = millis();
+    unsigned long lastDotMs = start;
     while (WiFi.status() != WL_CONNECTED &&
            millis() - start < WIFI_TIMEOUT_MS) {
-      Serial.print(".");
-      delay(500);
+      if (scrollMessageActive) {
+        tickScrollMessageDisplay();
+      }
+      if (millis() - lastDotMs >= 500) {
+        Serial.print(".");
+        lastDotMs = millis();
+      }
+      delay(10);
     }
 
     if (WiFi.status() == WL_CONNECTED) {
@@ -2160,7 +1799,7 @@ void setup() {
       Serial.print("Connected! IP: ");
       Serial.println(WiFi.localIP());
 
-      if (!DISABLE_INTRO_AND_WIFI_INFO) {
+      if (!scrollMessageActive && !DISABLE_INTRO_AND_WIFI_INFO) {
         // Scroll IP across matrix then pause on last frame for 2 seconds
         String ip = WiFi.localIP().toString();
         Display.displayScroll(ip.c_str(), PA_LEFT, PA_SCROLL_LEFT, 80);
@@ -2175,9 +1814,11 @@ void setup() {
       registerRoutes();
       server.begin();
 
-      Display.displayClear();
-      Display.print("Get Data");
-      delay(250);
+      if (!scrollMessageActive) {
+        Display.displayClear();
+        Display.print("Get Data");
+        delay(250);
+      }
 
       client.setInsecure();
     } else {
@@ -2207,12 +1848,16 @@ void loop() {
 
   server.handleClient();
 
-  unsigned long now = millis();
-  unsigned long refreshInterval = (unsigned long)saved_refresh_minutes * 60000UL;
+  if (scrollMessageActive) {
+    tickScrollMessageDisplay();
+    return;
+  }
 
-  if (canRefreshStats() &&
-      (!statsLoaded || api_lasttime == 0 ||
-       now - api_lasttime >= refreshInterval)) {
+  unsigned long now = millis();
+  unsigned long refreshInterval = (unsigned long)REFRESH_MINUTES * 60000UL;
+
+  if (canRefreshStats() && (!statsLoaded || api_lasttime == 0 ||
+                            now - api_lasttime >= refreshInterval)) {
     bool hadStats = statsLoaded;
     if (fetchStats()) {
       if (!hadStats) {
@@ -2238,7 +1883,7 @@ void loop() {
       display_lasttime = now;
     }
 
-    if (checkAndRunHolidayEasterEgg(Display, saved_holiday_reminder_minutes)) {
+    if (checkAndRunHolidayEasterEgg(Display, HOLIDAY_REMINDER_MINUTES)) {
       now = millis();
       if (selectedStatsCount() > 1) {
         startStatScrollIn();
@@ -2255,7 +1900,7 @@ void loop() {
       } else if (tickStatScrollAnimation()) {
         // Label/number scroll animation in progress.
       } else if (now - cycle_lasttime >=
-                 (unsigned long)(saved_stat_cycle_seconds * 1000.0f)) {
+                 (unsigned long)(STAT_CYCLE_SECONDS * 1000.0f)) {
         startStatExitTransition();
         display_lasttime = now;
       } else if (now - display_lasttime >= DISPLAY_UPDATE_MS) {
