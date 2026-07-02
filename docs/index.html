@@ -11,9 +11,9 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --green:     #22c55e;
-      --green-dim: #16a34a;
-      --green-glow: rgba(34,197,94,0.15);
+      --blue:      #3b82f6;
+      --blue-dim:  #2563eb;
+      --blue-glow: rgba(59,130,246,0.15);
       --bg:        #0d0d0d;
       --surface:   #141414;
       --surface2:  #1a1a1a;
@@ -53,7 +53,7 @@
       color: #fff;
       margin-bottom: 16px;
     }
-    .hero h1 span { color: var(--green); }
+    .hero h1 span { color: var(--blue); }
 
     .hero p {
       font-size: 16px;
@@ -79,19 +79,19 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      background: var(--green-glow);
-      border: 1px solid rgba(34,197,94,.25);
+      background: var(--blue-glow);
+      border: 1px solid rgba(59,130,246,.25);
       border-radius: 20px;
       padding: 4px 12px;
       font-family: var(--mono);
       font-size: 12px;
-      color: var(--green);
+      color: var(--blue);
       margin-bottom: 20px;
     }
     .version-dot {
       width: 6px; height: 6px;
       border-radius: 50%;
-      background: var(--green);
+      background: var(--blue);
       animation: pulse 2s ease-in-out infinite;
     }
     @keyframes pulse {
@@ -113,12 +113,12 @@
 
     /* ESP Web Tools button override */
     esp-web-install-button {
-      --esp-tools-button-color: var(--green);
-      --esp-tools-button-text-color: #0a2e18;
+      --esp-tools-button-color: var(--blue);
+      --esp-tools-button-text-color: #061a3a;
     }
     esp-web-install-button::part(button) {
-      background: var(--green);
-      color: #0a2e18;
+      background: var(--blue);
+      color: #061a3a;
       border: none;
       border-radius: 10px;
       padding: 13px 32px;
@@ -128,11 +128,11 @@
       cursor: pointer;
       width: 100%;
       transition: background .15s, box-shadow .15s;
-      box-shadow: 0 0 20px rgba(34,197,94,.2);
+      box-shadow: 0 0 20px rgba(59,130,246,.2);
     }
     esp-web-install-button::part(button):hover {
-      background: var(--green-dim);
-      box-shadow: 0 0 28px rgba(34,197,94,.35);
+      background: var(--blue-dim);
+      box-shadow: 0 0 28px rgba(59,130,246,.35);
     }
 
     .browser-note {
@@ -198,9 +198,9 @@
       font-family: var(--mono);
       font-size: 12px;
       font-weight: 700;
-      color: var(--green);
-      background: var(--green-glow);
-      border: 1px solid rgba(34,197,94,.2);
+      color: var(--blue);
+      background: var(--blue-glow);
+      border: 1px solid rgba(59,130,246,.2);
       border-radius: 6px;
       width: 26px;
       height: 26px;
@@ -224,9 +224,9 @@
       border: 1px solid var(--border);
       border-radius: 4px;
       padding: 1px 6px;
-      color: var(--green);
+      color: var(--blue);
     }
-    .step-text a { color: var(--green); text-decoration: none; }
+    .step-text a { color: var(--blue); text-decoration: none; }
     .step-text a:hover { text-decoration: underline; }
 
     /* ── FOOTER ── */
@@ -261,9 +261,9 @@
 
   <esp-web-install-button id="install-btn" manifest="" style="display:none">
     <button slot="activate" style="
-      background: #22c55e; color: #0a2e18; border: none; border-radius: 10px;
+      background: #3b82f6; color: #061a3a; border: none; border-radius: 10px;
       padding: 13px 32px; font-family: inherit; font-size: 15px; font-weight: 600;
-      cursor: pointer; width: 100%; box-shadow: 0 0 20px rgba(34,197,94,.2);
+      cursor: pointer; width: 100%; box-shadow: 0 0 20px rgba(59,130,246,.2);
     ">⚡ Install now</button>
   </esp-web-install-button>
 
