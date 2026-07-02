@@ -7,6 +7,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
+#include "boot_network_display.h"
 #include "programs/program.h"
 #include "setup_html.h"
 
@@ -446,6 +447,7 @@ bool connectToSavedWiFi() {
   Serial.println("");
   Serial.print("Connected! IP: ");
   Serial.println(WiFi.localIP());
+  showBootIpAddress(Display, WiFi.localIP());
   return true;
 }
 
