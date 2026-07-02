@@ -1,0 +1,60 @@
+---
+description: Project scripts and when to use them
+alwaysApply: true
+---
+
+# Scripts
+
+All scripts live in `scripts/` at the repo root. Run them from anywhere; each resolves paths relative to the repo root.
+
+## `scripts/build-firmware.sh`
+
+Builds the ESP32 firmware with PlatformIO in `Firmware-PIO/`.
+
+- Finds `pio` on PATH or at `~/.platformio/penv/bin/pio`
+- Equivalent to `cd Firmware-PIO && pio run`
+- Extra PlatformIO args are forwarded (e.g. `./scripts/build-firmware.sh -t upload`)
+
+Use this instead of calling `pio` directly when you want a consistent entry point from the repo root.
+
+## `scripts/update-web-installer.sh`
+
+Refreshes the browser installer binaries in `docs/` after a successful build.
+
+- Copies from `Firmware-PIO/.pio/build/esp32dev/`:
+  - `bootloader.bin`
+  - `partitions.bin`
+  - `firmware.bin`
+- Requires a prior build; exits with an error if any file is missing
+
+Typical release workflow:
+
+```bash
+./scripts/build-firmware.sh
+./scripts/update-web-installer.sh
+# Bump "version" in docs/manifest.json, then commit docs/
+```
+
+The [browser installer](https://justinmahar.github.io/YouTube-Subscriber-Counter/) (esp-web-tools) serves these files from GitHub Pages. OTA updates on a flashed device use `firmware.bin` only; the browser installer flashes the full image.
+
+## `scripts/preview-installer.sh`
+
+Serves `docs/` locally to preview the browser installer before publishing.
+
+- Default URL: `http://localhost:8765/`
+- Optional port: `./scripts/preview-installer.sh 9000`
+- Uses `python3 -m http.server`
+
+Use this to verify `docs/index.html`, `docs/manifest.json`, and the `.bin` files without pushing to GitHub Pages.
+
+## Deploy / Dev
+
+If users says to prepare to deploy, do the following:
+- Set DISABLE_INTRO_AND_WIFI_INFO to false
+- Set ENABLE_WOKWI_SETUP to false
+
+If users says to go back to development mode, do the following:
+- Set DISABLE_INTRO_AND_WIFI_INFO to true
+- Set ENABLE_WOKWI_SETUP to true
+
+Then run the build the firmware.
