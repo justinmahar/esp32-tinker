@@ -20,7 +20,7 @@
 #define WIFI_TIMEOUT_MS 15000
 #define WOKWI_SETUP_TIMEOUT_MS 8000
 
-const bool ENABLE_WOKWI_SETUP = true;
+const bool ENABLE_WOKWI_SETUP = false;
 
 const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
 const size_t MAX_SCROLL_MESSAGE_LENGTH = 64;
