@@ -164,7 +164,7 @@ double getProjectedFractionalStatValue(double baselineStartedAtUnix,
 // ─── Helpers
 // ──────────────────────────────────────────────────────────────────
 void loadPrefs() {
-  prefs.begin("ytcounter", true);
+  prefs.begin("esp32tinker", true);
   saved_ssid = prefs.getString("ssid", "");
   saved_pass = prefs.getString("pass", "");
   saved_scroll_message = prefs.getString("scrollMsg", "");
@@ -189,7 +189,7 @@ void loadPrefs() {
 
 void savePrefs(String ssid, String pass, const String &scrollMessage,
                unsigned int scrollSpeedMs, uint8_t displayBrightness) {
-  prefs.begin("ytcounter", false);
+  prefs.begin("esp32tinker", false);
   prefs.putString("ssid", ssid);
   prefs.putString("pass", pass);
   prefs.putString("scrollMsg", scrollMessage);
