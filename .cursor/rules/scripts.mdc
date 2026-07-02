@@ -35,7 +35,7 @@ Typical release workflow:
 # Bump "version" in docs/manifest.json, then commit docs/
 ```
 
-The [browser installer](https://justinmahar.github.io/YouTube-Subscriber-Counter/) (esp-web-tools) serves these files from GitHub Pages. OTA updates on a flashed device use `firmware.bin` only; the browser installer flashes the full image.
+The [browser installer](https://justinmahar.github.io/esp32-tinker/) (esp-web-tools) serves these files from GitHub Pages. OTA updates on a flashed device use `firmware.bin` only; the browser installer flashes the full image.
 
 ## `scripts/preview-installer.sh`
 

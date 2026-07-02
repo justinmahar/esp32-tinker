@@ -1,6 +1,6 @@
 {
-  "name": "YouTube Stats Counter",
-  "version": "3.4.0",
+  "name": "ESP32 Tinker",
+  "version": "0.0.1",
   "builds": [
     {
       "chipFamily": "ESP32",
