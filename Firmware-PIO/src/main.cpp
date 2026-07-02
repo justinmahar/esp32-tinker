@@ -28,6 +28,7 @@ const unsigned int DEFAULT_FIREWORKS_MIN_LAUNCH_DELAY_MS = 60;
 const unsigned int DEFAULT_FIREWORKS_MAX_LAUNCH_DELAY_MS = 2000;
 const unsigned int DEFAULT_FIREWORKS_ANIM_SPEED_MS = 60;
 const uint8_t DEFAULT_DISPLAY_BRIGHTNESS = 0;
+const uint8_t DEFAULT_FIREWORKS_MAX_BRIGHTNESS = 15;
 
 MD_Parola Display = MD_Parola(HARDWARE_TYPE, CS_PIN, MAX_DEVICES);
 WebServer server(80);
@@ -88,10 +89,18 @@ void loadPrefs() {
   }
   programConfig.brightness =
       prefs.getUChar("brightness", DEFAULT_DISPLAY_BRIGHTNESS);
+  programConfig.fireworksMaxBrightness =
+      prefs.getUChar("fwMaxBright", DEFAULT_FIREWORKS_MAX_BRIGHTNESS);
   prefs.end();
 
   if (programConfig.brightness > 15) {
     programConfig.brightness = 15;
+  }
+  if (programConfig.fireworksMaxBrightness > 15) {
+    programConfig.fireworksMaxBrightness = 15;
+  }
+  if (programConfig.fireworksMaxBrightness < programConfig.brightness) {
+    programConfig.fireworksMaxBrightness = programConfig.brightness;
   }
 
   Serial.print("Config loaded: ssid=");
@@ -111,7 +120,9 @@ void loadPrefs() {
   Serial.print(", fwAnimMs=");
   Serial.print(programConfig.fireworksAnimSpeedMs);
   Serial.print(", brightness=");
-  Serial.println(programConfig.brightness);
+  Serial.print(programConfig.brightness);
+  Serial.print(", fwMaxBright=");
+  Serial.println(programConfig.fireworksMaxBrightness);
 }
 
 void savePrefs(const String &ssid, const String &pass,
@@ -126,6 +137,7 @@ void savePrefs(const String &ssid, const String &pass,
   prefs.putUInt("fwMaxDelayMs", cfg.fireworksMaxLaunchDelayMs);
   prefs.putUInt("fwAnimMs", cfg.fireworksAnimSpeedMs);
   prefs.putUChar("brightness", cfg.brightness);
+  prefs.putUChar("fwMaxBright", cfg.fireworksMaxBrightness);
   prefs.end();
 }
 
@@ -157,7 +169,9 @@ String buildPage() {
                String(programConfig.fireworksMaxLaunchDelayMs));
   page.replace("FW_ANIM_MS_PLACEHOLDER",
                String(programConfig.fireworksAnimSpeedMs));
-  page.replace("BRIGHTNESS_PLACEHOLDER", String(programConfig.brightness));
+  page.replace("MIN_BRIGHTNESS_PLACEHOLDER", String(programConfig.brightness));
+  page.replace("MAX_BRIGHTNESS_PLACEHOLDER",
+               String(programConfig.fireworksMaxBrightness));
   return page;
 }
 
@@ -175,6 +189,9 @@ void handleSave() {
     displayBrightness = 15;
   }
   newConfig.brightness = (uint8_t)displayBrightness;
+  if (newConfig.fireworksMaxBrightness < newConfig.brightness) {
+    newConfig.fireworksMaxBrightness = newConfig.brightness;
+  }
 
   if (newConfig.program == ProgramId::Scroller) {
     String scrollMessage = server.arg("scrollMessage");
@@ -214,9 +231,21 @@ void handleSave() {
       return;
     }
 
+    int fireworksMaxBrightness = server.arg("fireworksMaxBrightness").toInt();
+    if (fireworksMaxBrightness < displayBrightness) {
+      server.send(400, "text/plain",
+                  "Max brightness must be greater than or equal to min.");
+      return;
+    }
+    if (fireworksMaxBrightness > 15) {
+      server.send(400, "text/plain", "Max brightness must be 0-15.");
+      return;
+    }
+
     newConfig.fireworksMinLaunchDelayMs = fireworksMinLaunchDelayMs;
     newConfig.fireworksMaxLaunchDelayMs = fireworksMaxLaunchDelayMs;
     newConfig.fireworksAnimSpeedMs = fireworksAnimSpeedMs;
+    newConfig.fireworksMaxBrightness = (uint8_t)fireworksMaxBrightness;
   }
 
   String new_ssid = server.arg("ssid");

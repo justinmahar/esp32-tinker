@@ -7,6 +7,8 @@
 
 namespace {
 constexpr uint8_t MATRIX_HEIGHT = 8;
+constexpr uint8_t MATRIX_WIDTH = 32;
+constexpr bool DEBUG_FIREWORKS_BRIGHTNESS = false;
 constexpr uint8_t MAX_SIMULTANEOUS_FIREWORKS = 8;
 constexpr uint8_t MAX_SIMULTANEOUS_GROUND_COMETS = 7;
 constexpr unsigned long MIN_FUSE_DELAY_MS = 120UL;
@@ -41,7 +43,7 @@ constexpr float WILLOW_BURST_DRAG = 0.20f;
 constexpr float CHRYSANTHEMUM_BURST_GRAVITY_SCALE = 0.92f;
 constexpr float WILLOW_BURST_GRAVITY_SCALE = 0.78f;
 constexpr float BURST_GRAVITY_DELAY = 0.70f;
-constexpr uint16_t CHRYSANTHEMUM_KIND_WEIGHT = 800;
+constexpr uint16_t CHRYSANTHEMUM_KIND_WEIGHT = 650;
 constexpr uint16_t GROUND_COMET_LAUNCH_WEIGHT = 20;
 constexpr uint16_t WILLOW_KIND_WEIGHT = 20;
 constexpr uint16_t BROCADE_KIND_WEIGHT = 20;
@@ -202,6 +204,8 @@ GroundComet groundComets[MAX_SIMULTANEOUS_GROUND_COMETS];
 ScreenFlashEmber screenFlashEmbers[MAX_SCREEN_FLASH_EMBERS];
 uint16_t screenFlashEmberCount = 0;
 FireworksSystem fireworksSystem;
+uint32_t litPixelRows[MATRIX_HEIGHT] = {0};
+uint16_t litPixelCount = 0;
 
 void resetAllFireworks();
 void resetAllGroundComets();
@@ -235,6 +239,16 @@ unsigned long sanitizedMaxLaunchDelay(const ProgramConfig &cfg) {
 
 bool timeReached(unsigned long now, unsigned long target) {
   return (int32_t)(now - target) >= 0;
+}
+
+uint8_t sanitizedBrightness(uint8_t brightness) {
+  return brightness > 15 ? 15 : brightness;
+}
+
+uint8_t sanitizedFireworksMaxBrightness(const ProgramConfig &cfg) {
+  uint8_t minBrightness = sanitizedBrightness(cfg.brightness);
+  uint8_t maxBrightness = sanitizedBrightness(cfg.fireworksMaxBrightness);
+  return max(maxBrightness, minBrightness);
 }
 
 float randomFloat(float minValue, float maxValue) {
@@ -291,12 +305,60 @@ void setPixel(int8_t row, int16_t col) {
   if (row < 0 || row >= MATRIX_HEIGHT || col < 0 || col >= matrixWidth()) {
     return;
   }
+  if (col < MATRIX_WIDTH) {
+    uint32_t pixelMask = 1UL << col;
+    if ((litPixelRows[row] & pixelMask) == 0) {
+      litPixelRows[row] |= pixelMask;
+      litPixelCount++;
+    }
+  }
   matrix()->setPoint(row, col, true);
 }
 
 void beginFrame() {
+  for (uint8_t row = 0; row < MATRIX_HEIGHT; row++) {
+    litPixelRows[row] = 0;
+  }
+  litPixelCount = 0;
   matrix()->control(MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
   matrix()->clear();
+}
+
+uint8_t calculateFireworksBrightness(const ProgramConfig &cfg,
+                                     float &brightnessPercent) {
+  uint8_t minBrightness = sanitizedBrightness(cfg.brightness);
+  uint8_t maxBrightness = sanitizedFireworksMaxBrightness(cfg);
+  uint16_t width = matrixWidth();
+  uint16_t trackedWidth = width < MATRIX_WIDTH ? width : MATRIX_WIDTH;
+  uint16_t pixelCapacity = MATRIX_HEIGHT * trackedWidth;
+  if (pixelCapacity == 0) {
+    brightnessPercent = 0.0f;
+    return minBrightness;
+  }
+
+  brightnessPercent = (litPixelCount * 100.0f) / pixelCapacity;
+  if (maxBrightness == minBrightness) {
+    return minBrightness;
+  }
+
+  float brightnessRange = maxBrightness - minBrightness;
+  float scaledBrightness =
+      minBrightness + (brightnessPercent / 100.0f) * brightnessRange;
+  uint8_t brightness = (uint8_t)roundf(scaledBrightness);
+  return brightness > maxBrightness ? maxBrightness : brightness;
+}
+
+void applyFireworksBrightness(const ProgramConfig &cfg) {
+  float brightnessPercent = 0.0f;
+  uint8_t brightness = calculateFireworksBrightness(cfg, brightnessPercent);
+  matrix()->control(MD_MAX72XX::INTENSITY, brightness);
+
+  if (DEBUG_FIREWORKS_BRIGHTNESS) {
+    Serial.print("Fireworks brightness: ");
+    Serial.print(brightnessPercent, 1);
+    Serial.print("% -> ");
+    Serial.println(brightness);
+  }
 }
 
 void endFrame() {
@@ -1056,7 +1118,7 @@ void drawFireworkInstance(const FireworkInstance &fw) {
   }
 }
 
-void renderAllFireworks() {
+void renderAllFireworks(const ProgramConfig &cfg) {
   beginFrame();
   for (uint8_t i = 0; i < MAX_SIMULTANEOUS_FIREWORKS; i++) {
     if (fireworks[i].active && fireworks[i].kind != FireworkKind::ScreenFlash) {
@@ -1071,6 +1133,7 @@ void renderAllFireworks() {
       drawFireworkInstance(fireworks[i]);
     }
   }
+  applyFireworksBrightness(cfg);
   endFrame();
 }
 
@@ -1449,6 +1512,7 @@ void fireworksStart(const ProgramConfig &cfg) {
   }
 
   unsigned long now = millis();
+  Display.setIntensity(sanitizedBrightness(cfg.brightness));
   Display.displayClear();
   resetAllFireworks();
   resetAllGroundComets();
@@ -1480,6 +1544,6 @@ void fireworksTick(const ProgramConfig &cfg) {
   }
 
   if (changed || anyFireworkActive() || anyGroundCometVisible()) {
-    renderAllFireworks();
+    renderAllFireworks(cfg);
   }
 }

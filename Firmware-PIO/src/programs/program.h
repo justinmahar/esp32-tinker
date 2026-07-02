@@ -15,6 +15,7 @@ struct ProgramConfig {
   unsigned int fireworksMaxLaunchDelayMs;
   unsigned int fireworksAnimSpeedMs;
   uint8_t brightness;
+  uint8_t fireworksMaxBrightness;
 };
 
 ProgramId parseProgramId(const String &value);

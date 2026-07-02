@@ -503,17 +503,31 @@
         <div class="divider"></div>
         <div class="section">Display</div>
         <div>
-          <label>Brightness</label>
+          <label id="brightness-label">Brightness</label>
           <input
             type="number"
             id="brightness"
             min="0"
             max="15"
             step="1"
-            value="BRIGHTNESS_PLACEHOLDER"
+            value="MIN_BRIGHTNESS_PLACEHOLDER"
+          />
+          <div class="hint" id="brightness-hint">
+            Baseline brightness for text and the dimmest Fireworks frames.
+          </div>
+        </div>
+        <div id="fireworks-brightness-config">
+          <label>Max brightness</label>
+          <input
+            type="number"
+            id="fireworks-max-brightness"
+            min="0"
+            max="15"
+            step="1"
+            value="MAX_BRIGHTNESS_PLACEHOLDER"
           />
           <div class="hint">
-            Baseline brightness for all text and animations.
+            Brightness Fireworks can boost to as the display fills up.
           </div>
         </div>
         <div id="msg" class="msg"></div>
@@ -545,6 +559,14 @@
           program !== "scroller";
         document.getElementById("fireworks-config").hidden =
           program !== "fireworks";
+        document.getElementById("fireworks-brightness-config").hidden =
+          program !== "fireworks";
+        document.getElementById("brightness-label").textContent =
+          program === "fireworks" ? "Min brightness" : "Brightness";
+        document.getElementById("brightness-hint").textContent =
+          program === "fireworks"
+            ? "Baseline brightness for text and the dimmest Fireworks frames."
+            : "Baseline brightness for text and animations.";
       }
       function persistSetupForm() {
         try {
@@ -562,6 +584,9 @@
               fireworksAnimMs:
                 document.getElementById("fireworks-anim-ms").value,
               brightness: document.getElementById("brightness").value,
+              fireworksMaxBrightness: document.getElementById(
+                "fireworks-max-brightness",
+              ).value,
             }),
           );
         } catch (e) {}
@@ -592,6 +617,9 @@
               d.fireworksAnimMs;
           if (d.brightness != null)
             document.getElementById("brightness").value = d.brightness;
+          if (d.fireworksMaxBrightness != null)
+            document.getElementById("fireworks-max-brightness").value =
+              d.fireworksMaxBrightness;
         } catch (e) {}
       }
       function bindSetupPersist() {
@@ -604,6 +632,7 @@
           "fireworks-max-delay",
           "fireworks-anim-ms",
           "brightness",
+          "fireworks-max-brightness",
         ].forEach(function (id) {
           var el = document.getElementById(id);
           el.addEventListener("input", persistSetupForm);
@@ -718,7 +747,16 @@
           document.getElementById("brightness").value,
           10,
         );
+        var fireworksMaxBrightness = parseInt(
+          document.getElementById("fireworks-max-brightness").value,
+          10,
+        );
         var msg = document.getElementById("msg");
+        if (isNaN(brightness) || brightness < 0 || brightness > 15) {
+          msg.className = "msg err";
+          msg.textContent = "Min brightness must be 0-15.";
+          return;
+        }
         if (program === "scroller") {
           if (scrollMessage.length > 64) {
             msg.className = "msg err";
@@ -747,11 +785,15 @@
             msg.textContent = "Animation speed must be greater than 0.";
             return;
           }
-        }
-        if (isNaN(brightness) || brightness < 0 || brightness > 15) {
-          msg.className = "msg err";
-          msg.textContent = "Brightness must be 0-15.";
-          return;
+          if (
+            isNaN(fireworksMaxBrightness) ||
+            fireworksMaxBrightness < brightness ||
+            fireworksMaxBrightness > 15
+          ) {
+            msg.className = "msg err";
+            msg.textContent = "Max brightness must be min brightness to 15.";
+            return;
+          }
         }
         persistSetupForm();
         msg.className = "msg ok";
@@ -774,7 +816,9 @@
           "&fireworksAnimMs=" +
           fireworksAnimMs +
           "&brightness=" +
-          brightness;
+          brightness +
+          "&fireworksMaxBrightness=" +
+          fireworksMaxBrightness;
         fetch("/save", {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
