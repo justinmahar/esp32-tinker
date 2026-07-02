@@ -50,11 +50,9 @@ Use this to verify `docs/index.html`, `docs/manifest.json`, and the `.bin` files
 ## Deploy / Dev
 
 If users says to prepare to deploy, do the following:
-- Set DISABLE_INTRO_AND_WIFI_INFO to false
 - Set ENABLE_WOKWI_SETUP to false
 
 If users says to go back to development mode, do the following:
-- Set DISABLE_INTRO_AND_WIFI_INFO to true
 - Set ENABLE_WOKWI_SETUP to true
 
 Then run the build the firmware.
