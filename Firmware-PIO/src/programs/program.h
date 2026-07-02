@@ -7,6 +7,8 @@ extern MD_Parola Display;
 
 enum class ProgramId : uint8_t { Scroller, Fireworks };
 
+constexpr size_t MAX_SCROLL_MESSAGE_LENGTH = 64;
+
 struct ProgramConfig {
   ProgramId program;
   String scrollMessage;

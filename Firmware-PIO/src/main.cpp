@@ -24,7 +24,6 @@
 const bool ENABLE_WOKWI_SETUP = false;
 
 const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
-const size_t MAX_SCROLL_MESSAGE_LENGTH = 64;
 const unsigned int DEFAULT_FIREWORKS_MIN_LAUNCH_DELAY_MS = 60;
 const unsigned int DEFAULT_FIREWORKS_MAX_LAUNCH_DELAY_MS = 2000;
 const unsigned int DEFAULT_FIREWORKS_ANIM_SPEED_MS = 60;
@@ -448,6 +447,7 @@ bool connectToSavedWiFi() {
   Serial.print("Connected! IP: ");
   Serial.println(WiFi.localIP());
   showBootIpAddress(Display, WiFi.localIP());
+  programStart(buildProgramConfig());
   return true;
 }
 
