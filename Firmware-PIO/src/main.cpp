@@ -119,6 +119,8 @@ uint8_t parseSelectedProgramsArg(const String &value) {
       selectedPrograms |= PROGRAM_FIREWORKS_FLAG;
     } else if (token == "maze_hero") {
       selectedPrograms |= PROGRAM_MAZE_HERO_FLAG;
+    } else if (token == "pixel_art") {
+      selectedPrograms |= PROGRAM_PIXEL_ART_FLAG;
     }
     start = comma + 1;
   }
@@ -135,24 +137,27 @@ ProgramId firstSelectedProgram(uint8_t selectedPrograms,
   if (selectedPrograms & PROGRAM_FIREWORKS_FLAG) {
     return ProgramId::Fireworks;
   }
-  return ProgramId::MazeHero;
+  if (selectedPrograms & PROGRAM_MAZE_HERO_FLAG) {
+    return ProgramId::MazeHero;
+  }
+  return ProgramId::PixelArt;
 }
 
 ProgramId nextSelectedProgram(uint8_t selectedPrograms,
                               ProgramId currentProgram) {
   selectedPrograms = sanitizeSelectedPrograms(selectedPrograms, currentProgram);
   ProgramId orderedPrograms[] = {ProgramId::Scroller, ProgramId::Fireworks,
-                                 ProgramId::MazeHero};
+                                 ProgramId::MazeHero, ProgramId::PixelArt};
   uint8_t currentIndex = 0;
-  for (uint8_t i = 0; i < 3; i++) {
+  for (uint8_t i = 0; i < 4; i++) {
     if (orderedPrograms[i] == currentProgram) {
       currentIndex = i;
       break;
     }
   }
 
-  for (uint8_t offset = 1; offset <= 3; offset++) {
-    ProgramId candidate = orderedPrograms[(currentIndex + offset) % 3];
+  for (uint8_t offset = 1; offset <= 4; offset++) {
+    ProgramId candidate = orderedPrograms[(currentIndex + offset) % 4];
     if (selectedPrograms & programIdToFlag(candidate)) {
       return candidate;
     }
@@ -171,6 +176,9 @@ bool hasMultipleSelectedPrograms(uint8_t selectedPrograms,
     selectedCount++;
   }
   if (selectedPrograms & PROGRAM_MAZE_HERO_FLAG) {
+    selectedCount++;
+  }
+  if (selectedPrograms & PROGRAM_PIXEL_ART_FLAG) {
     selectedCount++;
   }
   return selectedCount > 1;
@@ -249,6 +257,12 @@ String selectedProgramsToString(uint8_t selectedPrograms) {
       value += ",";
     }
     value += "maze_hero";
+  }
+  if (selectedPrograms & PROGRAM_PIXEL_ART_FLAG) {
+    if (value.length() > 0) {
+      value += ",";
+    }
+    value += "pixel_art";
   }
   return value;
 }
@@ -474,6 +488,9 @@ void handleSave() {
   }
   if (server.arg("programMazeHero") == "1") {
     selectedPrograms |= PROGRAM_MAZE_HERO_FLAG;
+  }
+  if (server.arg("programPixelArt") == "1") {
+    selectedPrograms |= PROGRAM_PIXEL_ART_FLAG;
   }
   selectedPrograms &= PROGRAM_ALL_FLAGS;
   if (selectedPrograms == 0) {

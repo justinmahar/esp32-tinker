@@ -495,6 +495,14 @@
                 />
                 <span>Maze Hero</span>
               </label>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  id="program-pixel-art"
+                  value="pixel_art"
+                />
+                <span>Pixel Art</span>
+              </label>
             </div>
             <div class="hint">
               Checked programs cycle in this order and are remembered here.
@@ -712,11 +720,12 @@
       var SERVER_PROGRAM = "PROGRAM_PLACEHOLDER";
       var SERVER_SELECTED_PROGRAMS = "SELECTED_PROGRAMS_PLACEHOLDER";
       var SERVER_PROGRAM_DURATION_MINUTES = "PROGRAM_DURATION_PLACEHOLDER";
-      var PROGRAM_IDS = ["scroller", "fireworks", "maze_hero"];
+      var PROGRAM_IDS = ["scroller", "fireworks", "maze_hero", "pixel_art"];
       var PROGRAM_CHECKBOX_IDS = {
         scroller: "program-scroller",
         fireworks: "program-fireworks",
         maze_hero: "program-maze-hero",
+        pixel_art: "program-pixel-art",
       };
       var PROGRAM_DEFAULTS = {
         scroller: {
@@ -742,6 +751,7 @@
         scroller: "Simple Scroller",
         fireworks: "Fireworks",
         maze_hero: "Maze Hero",
+        pixel_art: "Pixel Art",
       };
       function isProgramSelected(program) {
         return document.getElementById(PROGRAM_CHECKBOX_IDS[program]).checked;
@@ -889,6 +899,7 @@
           "program-scroller",
           "program-fireworks",
           "program-maze-hero",
+          "program-pixel-art",
           "program-duration-minutes",
           "scroll-message",
           "scroll-speed",
@@ -1216,6 +1227,8 @@
           (isProgramSelected("fireworks") ? "1" : "0") +
           "&programMazeHero=" +
           (isProgramSelected("maze_hero") ? "1" : "0") +
+          "&programPixelArt=" +
+          (isProgramSelected("pixel_art") ? "1" : "0") +
           "&programDurationMinutes=" +
           encodeURIComponent(programDurationMinutes) +
           "&scrollMessage=" +

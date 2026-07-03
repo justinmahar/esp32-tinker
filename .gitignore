@@ -1,3 +1,4 @@
 .env.local
 scripts/.env.local
 Firmware-PIO/include/*.generated.h
+/pixel-art

@@ -5,13 +5,15 @@
 
 extern MD_Parola Display;
 
-enum class ProgramId : uint8_t { Scroller, Fireworks, MazeHero };
+enum class ProgramId : uint8_t { Scroller, Fireworks, MazeHero, PixelArt };
 
 constexpr uint8_t PROGRAM_SCROLLER_FLAG = 1U << 0;
 constexpr uint8_t PROGRAM_FIREWORKS_FLAG = 1U << 1;
 constexpr uint8_t PROGRAM_MAZE_HERO_FLAG = 1U << 2;
+constexpr uint8_t PROGRAM_PIXEL_ART_FLAG = 1U << 3;
 constexpr uint8_t PROGRAM_ALL_FLAGS =
-    PROGRAM_SCROLLER_FLAG | PROGRAM_FIREWORKS_FLAG | PROGRAM_MAZE_HERO_FLAG;
+    PROGRAM_SCROLLER_FLAG | PROGRAM_FIREWORKS_FLAG | PROGRAM_MAZE_HERO_FLAG |
+    PROGRAM_PIXEL_ART_FLAG;
 constexpr uint8_t DEFAULT_SELECTED_PROGRAMS =
     PROGRAM_FIREWORKS_FLAG | PROGRAM_MAZE_HERO_FLAG;
 constexpr float DEFAULT_PROGRAM_DURATION_MINUTES = 5.0f;
