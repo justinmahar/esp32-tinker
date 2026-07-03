@@ -1,27 +1,11 @@
 #include "camera.h"
 
+#include "play_world.h"
+
 namespace MazeHero {
 namespace {
 
 constexpr uint8_t HERO_VIEW_PADDING_PX = 2;
-
-int16_t approach(int16_t current, int16_t target) {
-  if (current < target) {
-    return current + 1;
-  }
-  if (current > target) {
-    return current - 1;
-  }
-  return current;
-}
-
-int16_t mazePixelWidth(const Maze &maze) { return maze.width() * 2 + 1; }
-
-int16_t mazePixelHeight(const Maze &maze) { return maze.height() * 2 + 1; }
-
-int16_t heroPixelX(Coord hero) { return hero.x * 2 + 1; }
-
-int16_t heroPixelY(Coord hero) { return hero.y * 2 + 1; }
 
 } // namespace
 
@@ -38,8 +22,8 @@ void Camera::reset(const Maze &maze, uint16_t viewWidth, uint8_t viewHeight,
 
 void Camera::updateTarget(const Maze &maze, uint16_t viewWidth,
                           uint8_t viewHeight, Coord hero) {
-  int16_t heroX = heroPixelX(hero);
-  int16_t heroY = heroPixelY(hero);
+  int16_t heroX = cellCenterX(hero);
+  int16_t heroY = cellCenterY(hero);
 
   if (viewWidth > HERO_VIEW_PADDING_PX * 2) {
     int16_t screenX = heroX - targetX;
@@ -64,8 +48,8 @@ void Camera::updateTarget(const Maze &maze, uint16_t viewWidth,
 }
 
 bool Camera::stepTowardTarget() {
-  int16_t nextX = approach(offsetX, targetX);
-  int16_t nextY = approach(offsetY, targetY);
+  int16_t nextX = approachOnePixel(offsetX, targetX);
+  int16_t nextY = approachOnePixel(offsetY, targetY);
   bool changed = nextX != offsetX || nextY != offsetY;
   offsetX = nextX;
   offsetY = nextY;

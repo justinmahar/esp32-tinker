@@ -4,6 +4,7 @@
 #include "fog_of_war.h"
 #include "hero_ai.h"
 #include "maze.h"
+#include "play_world.h"
 #include "renderer.h"
 
 #include <esp_system.h>
@@ -14,6 +15,7 @@ namespace {
 constexpr unsigned long RENDER_FRAME_MS = 45UL;
 
 enum class GameState : uint8_t { IntroAnimation, Playing, VictoryAnimation };
+enum class MovementPhase : uint8_t { IdleAtCell, CrossingPassage };
 
 struct Game {
   Maze maze;
@@ -22,9 +24,11 @@ struct Game {
   Renderer renderer;
   HeroAi ai;
   Coord hero;
+  Coord pendingHero;
   int16_t heroWorldX = 0;
   int16_t heroWorldY = 0;
   GameState state = GameState::Playing;
+  MovementPhase movementPhase = MovementPhase::IdleAtCell;
   bool seeded = false;
   uint8_t frame = 0;
   unsigned long lastMoveMs = 0;
@@ -36,32 +40,30 @@ struct Game {
 
 Game game;
 
-int16_t approach(int16_t current, int16_t target) {
-  if (current < target) {
-    return current + 1;
-  }
-  if (current > target) {
-    return current - 1;
-  }
-  return current;
+bool heroAtPendingCellCenter() {
+  return game.heroWorldX == cellCenterX(game.pendingHero) &&
+         game.heroWorldY == cellCenterY(game.pendingHero);
 }
 
-int16_t heroPixelX(Coord hero) { return hero.x * 2 + 1; }
+unsigned long randomHeroSpeedMs(const ProgramConfig &cfg);
 
-int16_t heroPixelY(Coord hero) { return hero.y * 2 + 1; }
-
-bool heroDrawnAtTarget() {
-  return game.heroWorldX == heroPixelX(game.hero) &&
-         game.heroWorldY == heroPixelY(game.hero);
+void resetMoveTimer(const ProgramConfig &cfg, unsigned long now) {
+  game.lastMoveMs = now;
+  game.moveDelayMs = randomHeroSpeedMs(cfg);
 }
 
-bool stepHeroTowardTarget() {
-  int16_t nextX = approach(game.heroWorldX, heroPixelX(game.hero));
-  int16_t nextY = approach(game.heroWorldY, heroPixelY(game.hero));
-  bool changed = nextX != game.heroWorldX || nextY != game.heroWorldY;
-  game.heroWorldX = nextX;
-  game.heroWorldY = nextY;
-  return changed;
+void stepHeroTowardPendingCell() {
+  game.heroWorldX =
+      approachOnePixel(game.heroWorldX, cellCenterX(game.pendingHero));
+  game.heroWorldY =
+      approachOnePixel(game.heroWorldY, cellCenterY(game.pendingHero));
+}
+
+void completeCellArrival() {
+  game.hero = game.pendingHero;
+  game.fog.markHeroVisited(game.maze, game.hero);
+  game.fog.revealFrom(game.maze, game.hero);
+  game.movementPhase = MovementPhase::IdleAtCell;
 }
 
 void startVictory(unsigned long now) {
@@ -84,8 +86,9 @@ void startNewMaze(const ProgramConfig &cfg) {
   game.maze.generate(cfg.mazeMinWidth, cfg.mazeMaxWidth, cfg.mazeMinHeight,
                      cfg.mazeMaxHeight);
   game.hero = game.maze.start();
-  game.heroWorldX = heroPixelX(game.hero);
-  game.heroWorldY = heroPixelY(game.hero);
+  game.pendingHero = game.hero;
+  game.heroWorldX = cellCenterX(game.hero);
+  game.heroWorldY = cellCenterY(game.hero);
   game.ai.reset();
   game.fog.reset(game.maze);
   game.fog.markHeroVisited(game.maze, game.hero);
@@ -93,6 +96,7 @@ void startNewMaze(const ProgramConfig &cfg) {
   game.camera.reset(game.maze, game.renderer.viewWidth(),
                     game.renderer.viewHeight(), game.hero);
   game.state = GameState::IntroAnimation;
+  game.movementPhase = MovementPhase::IdleAtCell;
   game.frame = 0;
   game.lastMoveMs = now;
   game.moveDelayMs = randomHeroSpeedMs(cfg);
@@ -120,29 +124,38 @@ void tickIntro(unsigned long now) {
 }
 
 void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
-  if (heroDrawnAtTarget() && sameCoord(game.hero, game.maze.finish())) {
+  if (game.movementPhase == MovementPhase::IdleAtCell &&
+      sameCoord(game.hero, game.maze.finish())) {
     startVictory(now);
     return;
   }
 
-  if (heroDrawnAtTarget() && now - game.lastMoveMs >= game.moveDelayMs) {
-    Coord next;
-    unsigned long decisionDelayMs = game.moveDelayMs;
-    if (game.ai.chooseNextStep(game.maze, game.fog, game.hero, now,
-                               decisionDelayMs, next)) {
-      game.lastMoveMs = now;
-      game.moveDelayMs = randomHeroSpeedMs(cfg);
-      game.hero = next;
-      game.fog.markHeroVisited(game.maze, game.hero);
-      game.fog.revealFrom(game.maze, game.hero);
-      game.camera.updateTarget(game.maze, game.renderer.viewWidth(),
-                               game.renderer.viewHeight(), game.hero);
+  if (now - game.lastMoveMs >= game.moveDelayMs) {
+    if (game.movementPhase == MovementPhase::CrossingPassage) {
+      stepHeroTowardPendingCell();
+      resetMoveTimer(cfg, now);
+      if (heroAtPendingCellCenter()) {
+        completeCellArrival();
+      }
+    } else {
+      Coord next;
+      unsigned long decisionDelayMs = game.moveDelayMs;
+      if (game.ai.chooseNextStep(game.maze, game.fog, game.hero, now,
+                                 decisionDelayMs, next)) {
+        game.pendingHero = next;
+        game.movementPhase = MovementPhase::CrossingPassage;
+        stepHeroTowardPendingCell();
+        resetMoveTimer(cfg, now);
+        // Follow the committed destination while AI/fog remain cell-boundary
+        // driven until the visible hero reaches the next cell center.
+        game.camera.updateTarget(game.maze, game.renderer.viewWidth(),
+                                 game.renderer.viewHeight(), game.pendingHero);
+      }
     }
   }
 
   if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
     game.lastRenderMs = now;
-    stepHeroTowardTarget();
     game.camera.stepTowardTarget();
     game.renderer.renderPlaying(game.maze, game.fog, game.camera,
                                 game.heroWorldX, game.heroWorldY,

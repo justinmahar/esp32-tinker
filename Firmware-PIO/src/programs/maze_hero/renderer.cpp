@@ -1,6 +1,7 @@
 #include "renderer.h"
 
 #include "../program.h"
+#include "play_world.h"
 
 namespace MazeHero {
 namespace {
@@ -32,14 +33,6 @@ void setPixel(int16_t row, int16_t col, bool on = true) {
 }
 
 void clearPixel(int16_t row, int16_t col) { setPixel(row, col, false); }
-
-int16_t mazePixelWidth(const Maze &maze) { return maze.width() * 2 + 1; }
-
-int16_t mazePixelHeight(const Maze &maze) { return maze.height() * 2 + 1; }
-
-int16_t cellCenterX(Coord coord) { return coord.x * 2 + 1; }
-
-int16_t cellCenterY(Coord coord) { return coord.y * 2 + 1; }
 
 int16_t horizontalMargin(const Maze &maze, uint16_t viewWidth) {
   int16_t width = mazePixelWidth(maze);
