@@ -9,6 +9,7 @@
 
 #include "boot_network_display.h"
 #include "programs/program.h"
+#include "programs/transitions.h"
 #include "setup_html.h"
 
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
@@ -21,7 +22,7 @@
 #define WIFI_TIMEOUT_MS 15000
 #define WOKWI_SETUP_TIMEOUT_MS 8000
 
-const bool ENABLE_WOKWI_SETUP = true;
+const bool ENABLE_WOKWI_SETUP = false;
 
 const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
 const unsigned int DEFAULT_FIREWORKS_MIN_LAUNCH_DELAY_MS = 60;
@@ -34,7 +35,7 @@ const unsigned int DEFAULT_MAZE_MIN_WIDTH = 8;
 const unsigned int DEFAULT_MAZE_MAX_WIDTH = 40;
 const unsigned int DEFAULT_MAZE_MIN_HEIGHT = 4;
 const unsigned int DEFAULT_MAZE_MAX_HEIGHT = 24;
-const unsigned int DEFAULT_MAZE_HERO_MIN_SPEED_MS = 200;
+const unsigned int DEFAULT_MAZE_HERO_MIN_SPEED_MS = 120;
 const unsigned int DEFAULT_MAZE_HERO_MAX_SPEED_MS = 200;
 const uint8_t DEFAULT_DISPLAY_BRIGHTNESS = 0;
 const uint8_t DEFAULT_FIREWORKS_MAX_BRIGHTNESS = 15;
@@ -51,10 +52,32 @@ bool captivePortalActive = false;
 char setupMacSuffix[5] = "";
 char setupScrollBuffer[48] = "";
 
+struct ProgramScheduler {
+  ProgramConfig cfg;
+  bool started = false;
+  bool transitionActive = false;
+  unsigned long programStartMs = 0;
+};
+
+ProgramScheduler programScheduler;
+
 void loadPrefs();
 void savePrefs(const String &ssid, const String &pass,
                const ProgramConfig &cfg);
 ProgramConfig buildProgramConfig();
+uint8_t sanitizeSelectedPrograms(uint8_t selectedPrograms,
+                                 ProgramId fallbackProgram);
+uint8_t parseSelectedProgramsArg(const String &value);
+ProgramId firstSelectedProgram(uint8_t selectedPrograms,
+                               ProgramId fallbackProgram);
+ProgramId nextSelectedProgram(uint8_t selectedPrograms,
+                              ProgramId currentProgram);
+bool hasMultipleSelectedPrograms(uint8_t selectedPrograms,
+                                 ProgramId fallbackProgram);
+unsigned long programDurationMs(const ProgramConfig &cfg);
+void startProgramScheduler(const ProgramConfig &cfg);
+void tickProgramScheduler();
+String selectedProgramsToString(uint8_t selectedPrograms);
 String html_escape(String value);
 String buildPage();
 void registerRoutes();
@@ -66,12 +89,184 @@ void updateSetupDisplay();
 bool startWokwiConfigPortal();
 void startConfigPortal();
 
+uint8_t sanitizeSelectedPrograms(uint8_t selectedPrograms,
+                                 ProgramId fallbackProgram) {
+  selectedPrograms &= PROGRAM_ALL_FLAGS;
+  if (selectedPrograms == 0) {
+    selectedPrograms = programIdToFlag(fallbackProgram);
+  }
+  return selectedPrograms;
+}
+
+uint8_t parseSelectedProgramsArg(const String &value) {
+  uint8_t selectedPrograms = 0;
+  int start = 0;
+  while (start < value.length()) {
+    int comma = value.indexOf(',', start);
+    if (comma < 0) {
+      comma = value.length();
+    }
+    String token = value.substring(start, comma);
+    token.trim();
+    if (token == "scroller") {
+      selectedPrograms |= PROGRAM_SCROLLER_FLAG;
+    } else if (token == "fireworks") {
+      selectedPrograms |= PROGRAM_FIREWORKS_FLAG;
+    } else if (token == "maze_hero") {
+      selectedPrograms |= PROGRAM_MAZE_HERO_FLAG;
+    }
+    start = comma + 1;
+  }
+  return selectedPrograms;
+}
+
+ProgramId firstSelectedProgram(uint8_t selectedPrograms,
+                               ProgramId fallbackProgram) {
+  selectedPrograms =
+      sanitizeSelectedPrograms(selectedPrograms, fallbackProgram);
+  if (selectedPrograms & PROGRAM_SCROLLER_FLAG) {
+    return ProgramId::Scroller;
+  }
+  if (selectedPrograms & PROGRAM_FIREWORKS_FLAG) {
+    return ProgramId::Fireworks;
+  }
+  return ProgramId::MazeHero;
+}
+
+ProgramId nextSelectedProgram(uint8_t selectedPrograms,
+                              ProgramId currentProgram) {
+  selectedPrograms = sanitizeSelectedPrograms(selectedPrograms, currentProgram);
+  ProgramId orderedPrograms[] = {ProgramId::Scroller, ProgramId::Fireworks,
+                                 ProgramId::MazeHero};
+  uint8_t currentIndex = 0;
+  for (uint8_t i = 0; i < 3; i++) {
+    if (orderedPrograms[i] == currentProgram) {
+      currentIndex = i;
+      break;
+    }
+  }
+
+  for (uint8_t offset = 1; offset <= 3; offset++) {
+    ProgramId candidate = orderedPrograms[(currentIndex + offset) % 3];
+    if (selectedPrograms & programIdToFlag(candidate)) {
+      return candidate;
+    }
+  }
+  return firstSelectedProgram(selectedPrograms, currentProgram);
+}
+
+bool hasMultipleSelectedPrograms(uint8_t selectedPrograms,
+                                 ProgramId fallbackProgram) {
+  selectedPrograms = sanitizeSelectedPrograms(selectedPrograms, fallbackProgram);
+  uint8_t selectedCount = 0;
+  if (selectedPrograms & PROGRAM_SCROLLER_FLAG) {
+    selectedCount++;
+  }
+  if (selectedPrograms & PROGRAM_FIREWORKS_FLAG) {
+    selectedCount++;
+  }
+  if (selectedPrograms & PROGRAM_MAZE_HERO_FLAG) {
+    selectedCount++;
+  }
+  return selectedCount > 1;
+}
+
+unsigned long programDurationMs(const ProgramConfig &cfg) {
+  float minutes = cfg.programDurationMinutes;
+  if (minutes <= 0.0f) {
+    minutes = DEFAULT_PROGRAM_DURATION_MINUTES;
+  }
+  if (minutes > MAX_PROGRAM_DURATION_MINUTES) {
+    minutes = MAX_PROGRAM_DURATION_MINUTES;
+  }
+
+  double durationMs = (double)minutes * 60.0 * 1000.0;
+  if (durationMs < 1.0) {
+    return 1UL;
+  }
+  return (unsigned long)durationMs;
+}
+
+void startProgramScheduler(const ProgramConfig &cfg) {
+  programScheduler.cfg = cfg;
+  programScheduler.cfg.selectedPrograms =
+      sanitizeSelectedPrograms(cfg.selectedPrograms, cfg.program);
+  programScheduler.cfg.program =
+      firstSelectedProgram(programScheduler.cfg.selectedPrograms, cfg.program);
+  programScheduler.started = true;
+  programScheduler.transitionActive = false;
+  programScheduler.programStartMs = millis();
+  programStart(programScheduler.cfg);
+}
+
+void tickProgramScheduler() {
+  if (!programScheduler.started) {
+    startProgramScheduler(buildProgramConfig());
+  }
+
+  unsigned long now = millis();
+  if (programScheduler.transitionActive) {
+    if (transitionTick()) {
+      programScheduler.transitionActive = false;
+      programScheduler.cfg.program = nextSelectedProgram(
+          programScheduler.cfg.selectedPrograms, programScheduler.cfg.program);
+      programScheduler.programStartMs = millis();
+      programStart(programScheduler.cfg);
+    }
+    return;
+  }
+
+  programTick(programScheduler.cfg);
+  if (hasMultipleSelectedPrograms(programScheduler.cfg.selectedPrograms,
+                                  programScheduler.cfg.program) &&
+      now - programScheduler.programStartMs >=
+      programDurationMs(programScheduler.cfg)) {
+    transitionStartRandom();
+    programScheduler.transitionActive = true;
+  }
+}
+
+String selectedProgramsToString(uint8_t selectedPrograms) {
+  selectedPrograms =
+      sanitizeSelectedPrograms(selectedPrograms, ProgramId::Scroller);
+  String value;
+  if (selectedPrograms & PROGRAM_SCROLLER_FLAG) {
+    value += "scroller";
+  }
+  if (selectedPrograms & PROGRAM_FIREWORKS_FLAG) {
+    if (value.length() > 0) {
+      value += ",";
+    }
+    value += "fireworks";
+  }
+  if (selectedPrograms & PROGRAM_MAZE_HERO_FLAG) {
+    if (value.length() > 0) {
+      value += ",";
+    }
+    value += "maze_hero";
+  }
+  return value;
+}
+
 void loadPrefs() {
   prefs.begin("esp32tinker", true);
   saved_ssid = prefs.getString("ssid", "");
   saved_pass = prefs.getString("pass", "");
   programConfig.program =
       parseProgramId(prefs.getString("program", "scroller"));
+  uint8_t savedPrograms = prefs.getUChar("programs", 0);
+  programConfig.selectedPrograms =
+      savedPrograms == 0
+          ? DEFAULT_SELECTED_PROGRAMS
+          : sanitizeSelectedPrograms(savedPrograms, programConfig.program);
+  programConfig.program = firstSelectedProgram(programConfig.selectedPrograms,
+                                               programConfig.program);
+  programConfig.programDurationMinutes =
+      prefs.getFloat("progDurMin", DEFAULT_PROGRAM_DURATION_MINUTES);
+  if (programConfig.programDurationMinutes <= 0.0f ||
+      programConfig.programDurationMinutes > MAX_PROGRAM_DURATION_MINUTES) {
+    programConfig.programDurationMinutes = DEFAULT_PROGRAM_DURATION_MINUTES;
+  }
   programConfig.scrollMessage = prefs.getString("scrollMsg", "");
   programConfig.scrollSpeedMs = prefs.getUInt("scrollSpeed", 0);
   if (programConfig.scrollSpeedMs == 0) {
@@ -149,6 +344,10 @@ void loadPrefs() {
   Serial.print(saved_ssid.length() ? saved_ssid : "(empty)");
   Serial.print(", program=");
   Serial.print(programIdToString(programConfig.program));
+  Serial.print(", selectedPrograms=");
+  Serial.print(selectedProgramsToString(programConfig.selectedPrograms));
+  Serial.print(", programDurationMin=");
+  Serial.print(programConfig.programDurationMinutes);
   Serial.print(", scrollMsg=");
   Serial.print(programConfig.scrollMessage.length()
                    ? programConfig.scrollMessage
@@ -185,6 +384,9 @@ void savePrefs(const String &ssid, const String &pass,
   prefs.putString("ssid", ssid);
   prefs.putString("pass", pass);
   prefs.putString("program", programIdToString(cfg.program));
+  prefs.putUChar("programs",
+                 sanitizeSelectedPrograms(cfg.selectedPrograms, cfg.program));
+  prefs.putFloat("progDurMin", cfg.programDurationMinutes);
   prefs.putString("scrollMsg", cfg.scrollMessage);
   prefs.putUInt("scrollSpeed", cfg.scrollSpeedMs);
   prefs.putUInt("fwMinDelayMs", cfg.fireworksMinLaunchDelayMs);
@@ -220,6 +422,11 @@ String buildPage() {
   page.replace("SSID_PLACEHOLDER", html_escape(saved_ssid));
   page.replace("PROGRAM_PLACEHOLDER",
                html_escape(programIdToString(programConfig.program)));
+  page.replace(
+      "SELECTED_PROGRAMS_PLACEHOLDER",
+      html_escape(selectedProgramsToString(programConfig.selectedPrograms)));
+  page.replace("PROGRAM_DURATION_PLACEHOLDER",
+               String(programConfig.programDurationMinutes, 3));
   page.replace("SCROLL_MESSAGE_PLACEHOLDER",
                html_escape(programConfig.scrollMessage));
   page.replace("SCROLL_SPEED_PLACEHOLDER", String(programConfig.scrollSpeedMs));
@@ -251,7 +458,37 @@ void handleRoot() { server.send(200, "text/html", buildPage()); }
 
 void handleSave() {
   ProgramConfig newConfig = programConfig;
-  newConfig.program = parseProgramId(server.arg("program"));
+  ProgramId fallbackProgram = parseProgramId(server.arg("program"));
+  uint8_t selectedPrograms =
+      parseSelectedProgramsArg(server.arg("selectedPrograms"));
+  if (server.arg("programScroller") == "1") {
+    selectedPrograms |= PROGRAM_SCROLLER_FLAG;
+  }
+  if (server.arg("programFireworks") == "1") {
+    selectedPrograms |= PROGRAM_FIREWORKS_FLAG;
+  }
+  if (server.arg("programMazeHero") == "1") {
+    selectedPrograms |= PROGRAM_MAZE_HERO_FLAG;
+  }
+  selectedPrograms &= PROGRAM_ALL_FLAGS;
+  if (selectedPrograms == 0) {
+    server.send(400, "text/plain", "Select at least one program.");
+    return;
+  }
+
+  float programDurationMinutes = server.arg("programDurationMinutes").toFloat();
+  if (programDurationMinutes <= 0.0f ||
+      programDurationMinutes > MAX_PROGRAM_DURATION_MINUTES) {
+    server.send(400, "text/plain",
+                "Program duration must be greater than 0 and at most 43200.");
+    return;
+  }
+
+  newConfig.selectedPrograms =
+      sanitizeSelectedPrograms(selectedPrograms, fallbackProgram);
+  newConfig.program =
+      firstSelectedProgram(newConfig.selectedPrograms, fallbackProgram);
+  newConfig.programDurationMinutes = programDurationMinutes;
 
   int displayBrightness = server.arg("brightness").toInt();
   if (displayBrightness < 0) {
@@ -265,7 +502,7 @@ void handleSave() {
     newConfig.fireworksMaxBrightness = newConfig.brightness;
   }
 
-  if (newConfig.program == ProgramId::Scroller) {
+  if (newConfig.selectedPrograms & PROGRAM_SCROLLER_FLAG) {
     String scrollMessage = server.arg("scrollMessage");
     scrollMessage.trim();
     if (scrollMessage.length() > MAX_SCROLL_MESSAGE_LENGTH) {
@@ -281,7 +518,8 @@ void handleSave() {
 
     newConfig.scrollMessage = scrollMessage;
     newConfig.scrollSpeedMs = scrollSpeedMs;
-  } else if (newConfig.program == ProgramId::Fireworks) {
+  }
+  if (newConfig.selectedPrograms & PROGRAM_FIREWORKS_FLAG) {
     unsigned int fireworksMinLaunchDelayMs =
         server.arg("fireworksMinDelay").toInt();
     unsigned int fireworksMaxLaunchDelayMs =
@@ -318,7 +556,8 @@ void handleSave() {
     newConfig.fireworksMaxLaunchDelayMs = fireworksMaxLaunchDelayMs;
     newConfig.fireworksAnimSpeedMs = fireworksAnimSpeedMs;
     newConfig.fireworksMaxBrightness = (uint8_t)fireworksMaxBrightness;
-  } else if (newConfig.program == ProgramId::MazeHero) {
+  }
+  if (newConfig.selectedPrograms & PROGRAM_MAZE_HERO_FLAG) {
     unsigned int mazeMinWidth = server.arg("mazeMinWidth").toInt();
     unsigned int mazeMaxWidth = server.arg("mazeMaxWidth").toInt();
     unsigned int mazeMinHeight = server.arg("mazeMinHeight").toInt();
@@ -534,13 +773,12 @@ bool connectToSavedWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(saved_ssid.c_str(), saved_pass.c_str());
 
-  ProgramConfig cfg = buildProgramConfig();
-  programStart(cfg);
+  startProgramScheduler(buildProgramConfig());
 
   unsigned long start = millis();
   unsigned long lastDotMs = start;
   while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_TIMEOUT_MS) {
-    programTick(cfg);
+    tickProgramScheduler();
     if (millis() - lastDotMs >= 500) {
       Serial.print(".");
       lastDotMs = millis();
@@ -559,7 +797,7 @@ bool connectToSavedWiFi() {
   Serial.println(WiFi.localIP());
   if (!ENABLE_WOKWI_SETUP) {
     showBootIpAddress(Display, WiFi.localIP());
-    programStart(buildProgramConfig());
+    startProgramScheduler(buildProgramConfig());
   }
   return true;
 }
@@ -600,5 +838,5 @@ void loop() {
   }
 
   server.handleClient();
-  programTick(buildProgramConfig());
+  tickProgramScheduler();
 }

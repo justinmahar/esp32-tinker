@@ -26,6 +26,18 @@ const char *programIdToString(ProgramId id) {
   }
 }
 
+uint8_t programIdToFlag(ProgramId id) {
+  switch (id) {
+  case ProgramId::Fireworks:
+    return PROGRAM_FIREWORKS_FLAG;
+  case ProgramId::MazeHero:
+    return PROGRAM_MAZE_HERO_FLAG;
+  case ProgramId::Scroller:
+  default:
+    return PROGRAM_SCROLLER_FLAG;
+  }
+}
+
 void programStart(const ProgramConfig &cfg) {
   switch (cfg.program) {
   case ProgramId::Fireworks:

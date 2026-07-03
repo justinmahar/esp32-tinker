@@ -124,6 +124,20 @@
       .program-config .hint {
         margin-top: 6px;
       }
+      .settings-card {
+        background: #141414;
+        border: 1px solid #2a2a2a;
+        border-radius: 10px;
+        padding: 14px 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 13px;
+      }
+      .settings-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #f0f0f0;
+      }
       input[type="text"],
       input[type="password"],
       input[type="url"],
@@ -411,52 +425,91 @@
           <div class="dot-blue"></div>
           Connected &mdash; IP_PLACEHOLDER
         </div>
-        <div class="section">Wi-Fi</div>
-        <button class="btn-scan" id="scan-btn" onclick="scanNetworks()">
-          <span>&#8635;</span> Scan for networks
-        </button>
-        <div class="net-list" id="net-list"></div>
-        <div>
-          <label>Network name (SSID)</label
-          ><input
-            type="text"
-            id="ssid"
-            placeholder="Leave blank to keep saved"
-            value="SSID_PLACEHOLDER"
-          />
-        </div>
-        <div>
-          <label
-            >Password
-            <span style="color: #555; font-weight: 400; text-transform: none"
-              >(leave blank to keep saved)</span
-            ></label
-          >
-          <div class="pw-wrap">
-            <input
-              type="password"
-              id="pw"
-              placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
-            /><button
-              class="eye-btn"
-              type="button"
-              onclick="toggleEye('pw', 'eye-pw')"
+        <div class="settings-card">
+          <div class="settings-card-title">Wi-Fi Settings</div>
+          <button class="btn-scan" id="scan-btn" onclick="scanNetworks()">
+            <span>&#8635;</span> Scan for networks
+          </button>
+          <div class="net-list" id="net-list"></div>
+          <div>
+            <label>Network name (SSID)</label
+            ><input
+              type="text"
+              id="ssid"
+              placeholder="Leave blank to keep saved"
+              value="SSID_PLACEHOLDER"
+            />
+          </div>
+          <div>
+            <label
+              >Password
+              <span style="color: #555; font-weight: 400; text-transform: none"
+                >(leave blank to keep saved)</span
+              ></label
             >
-              <span id="eye-pw">&#128065;</span>
-            </button>
+            <div class="pw-wrap">
+              <input
+                type="password"
+                id="pw"
+                placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;"
+              /><button
+                class="eye-btn"
+                type="button"
+                onclick="toggleEye('pw', 'eye-pw')"
+              >
+                <span id="eye-pw">&#128065;</span>
+              </button>
+            </div>
           </div>
         </div>
-        <div class="divider"></div>
-        <div class="section">Program</div>
-        <div>
-          <label>Program</label>
-          <select id="program">
-            <option value="scroller">Simple Scroller</option>
-            <option value="fireworks">Fireworks</option>
-            <option value="maze_hero">Maze Hero</option>
-          </select>
+        <div class="settings-card">
+          <div class="settings-card-title">Program Schedule</div>
+          <div>
+            <label>Programs to run</label>
+            <div class="checks">
+              <label class="check">
+                <input type="checkbox" id="program-scroller" value="scroller" />
+                <span>Simple Scroller</span>
+              </label>
+              <label class="check">
+                <input type="checkbox" id="program-fireworks" value="fireworks" />
+                <span>Fireworks</span>
+              </label>
+              <label class="check">
+                <input
+                  type="checkbox"
+                  id="program-maze-hero"
+                  value="maze_hero"
+                />
+                <span>Maze Hero</span>
+              </label>
+            </div>
+            <div class="hint">
+              Checked programs cycle in this order and are remembered here.
+            </div>
+          </div>
+          <div>
+            <label>Program duration (minutes)</label>
+            <input
+              type="number"
+              id="program-duration-minutes"
+              min="0.1"
+              max="43200"
+              step="0.1"
+              value="PROGRAM_DURATION_PLACEHOLDER"
+            />
+            <div class="hint">Each selected program runs for this long.</div>
+          </div>
+          <button
+            class="btn-reset"
+            type="button"
+            onclick="resetProgramDefaults()"
+          >
+            Reset selected programs to defaults
+          </button>
         </div>
-        <div id="scroller-config" class="program-config">
+        <div id="scroller-config" class="settings-card program-config" hidden>
+          <div class="settings-card-title">Simple Scroller Settings</div>
           <div>
             <label>Scroll message</label>
             <input
@@ -481,7 +534,8 @@
             </div>
           </div>
         </div>
-        <div id="fireworks-config" class="program-config" hidden>
+        <div id="fireworks-config" class="settings-card program-config" hidden>
+          <div class="settings-card-title">Fireworks Settings</div>
           <div>
             <label>Min launch delay (ms)</label>
             <input
@@ -515,8 +569,23 @@
             />
             <div class="hint">Milliseconds between animation frames.</div>
           </div>
+          <div>
+            <label>Max brightness</label>
+            <input
+              type="number"
+              id="fireworks-max-brightness"
+              min="0"
+              max="15"
+              step="1"
+              value="MAX_BRIGHTNESS_PLACEHOLDER"
+            />
+            <div class="hint">
+              Brightness Fireworks can boost to as the display fills up.
+            </div>
+          </div>
         </div>
-        <div id="maze-hero-config" class="program-config" hidden>
+        <div id="maze-hero-config" class="settings-card program-config" hidden>
+          <div class="settings-card-title">Maze Hero Settings</div>
           <div>
             <label>Min maze width</label>
             <input
@@ -588,62 +657,55 @@
             </div>
           </div>
         </div>
-        <button class="btn-reset" type="button" onclick="resetProgramDefaults()">
-          Reset selected program to defaults
-        </button>
-        <div class="divider"></div>
-        <div class="section">Display</div>
-        <div>
-          <label id="brightness-label">Brightness</label>
-          <input
-            type="number"
-            id="brightness"
-            min="0"
-            max="15"
-            step="1"
-            value="MIN_BRIGHTNESS_PLACEHOLDER"
-          />
-          <div class="hint" id="brightness-hint">
-            Baseline brightness for text and the dimmest Fireworks frames.
-          </div>
-        </div>
-        <div id="fireworks-brightness-config">
-          <label>Max brightness</label>
-          <input
-            type="number"
-            id="fireworks-max-brightness"
-            min="0"
-            max="15"
-            step="1"
-            value="MAX_BRIGHTNESS_PLACEHOLDER"
-          />
-          <div class="hint">
-            Brightness Fireworks can boost to as the display fills up.
+        <div class="settings-card">
+          <div class="settings-card-title">Display Settings</div>
+          <div>
+            <label id="brightness-label">Brightness</label>
+            <input
+              type="number"
+              id="brightness"
+              min="0"
+              max="15"
+              step="1"
+              value="MIN_BRIGHTNESS_PLACEHOLDER"
+            />
+            <div class="hint" id="brightness-hint">
+              Baseline brightness for text and the dimmest Fireworks frames.
+            </div>
           </div>
         </div>
         <div id="msg" class="msg"></div>
         <button class="btn" onclick="save()">Save &amp; connect</button>
-        <div class="divider"></div>
-        <div class="section">Firmware update</div>
-        <div>
-          <label>Firmware .bin file</label>
-          <input type="file" id="binfile" accept=".bin" />
-          <div class="hint">
-            PlatformIO build output: .pio/build/esp32dev/firmware.bin
+        <div class="settings-card">
+          <div class="settings-card-title">Firmware Update</div>
+          <div>
+            <label>Firmware .bin file</label>
+            <input type="file" id="binfile" accept=".bin" />
+            <div class="hint">
+              PlatformIO build output: .pio/build/esp32dev/firmware.bin
+            </div>
           </div>
+          <div class="progress-wrap" id="prog-wrap">
+            <div class="progress-bar" id="prog-bar"></div>
+          </div>
+          <div id="ota-msg" class="msg"></div>
+          <button class="btn-ota" onclick="uploadFirmware()">
+            Upload firmware
+          </button>
         </div>
-        <div class="progress-wrap" id="prog-wrap">
-          <div class="progress-bar" id="prog-bar"></div>
-        </div>
-        <div id="ota-msg" class="msg"></div>
-        <button class="btn-ota" onclick="uploadFirmware()">
-          Upload firmware
-        </button>
       </div>
     </div>
     <script>
       var SETUP_STORAGE_KEY = "esp32TinkerSetup";
       var SERVER_PROGRAM = "PROGRAM_PLACEHOLDER";
+      var SERVER_SELECTED_PROGRAMS = "SELECTED_PROGRAMS_PLACEHOLDER";
+      var SERVER_PROGRAM_DURATION_MINUTES = "PROGRAM_DURATION_PLACEHOLDER";
+      var PROGRAM_IDS = ["scroller", "fireworks", "maze_hero"];
+      var PROGRAM_CHECKBOX_IDS = {
+        scroller: "program-scroller",
+        fireworks: "program-fireworks",
+        maze_hero: "program-maze-hero",
+      };
       var PROGRAM_DEFAULTS = {
         scroller: {
           scrollMessage: "",
@@ -660,7 +722,7 @@
           mazeMaxWidth: "40",
           mazeMinHeight: "4",
           mazeMaxHeight: "24",
-          mazeHeroMinSpeed: "200",
+          mazeHeroMinSpeed: "120",
           mazeHeroMaxSpeed: "200",
         },
       };
@@ -669,20 +731,46 @@
         fireworks: "Fireworks",
         maze_hero: "Maze Hero",
       };
+      function isProgramSelected(program) {
+        return document.getElementById(PROGRAM_CHECKBOX_IDS[program]).checked;
+      }
+      function selectedPrograms() {
+        return PROGRAM_IDS.filter(isProgramSelected);
+      }
+      function setSelectedPrograms(programs) {
+        PROGRAM_IDS.forEach(function (program) {
+          document.getElementById(PROGRAM_CHECKBOX_IDS[program]).checked =
+            programs.indexOf(program) !== -1;
+        });
+      }
+      function parsedProgramList(value) {
+        if (!value) return [];
+        return value
+          .split(",")
+          .map(function (program) {
+            return program.trim();
+          })
+          .filter(function (program) {
+            return PROGRAM_IDS.indexOf(program) !== -1;
+          });
+      }
+      function defaultSelectedPrograms() {
+        var programs = parsedProgramList(SERVER_SELECTED_PROGRAMS);
+        if (programs.length) return programs;
+        if (PROGRAM_IDS.indexOf(SERVER_PROGRAM) !== -1) return [SERVER_PROGRAM];
+        return ["fireworks", "maze_hero"];
+      }
       function updateProgramConfigVisibility() {
-        var program = document.getElementById("program").value;
         document.getElementById("scroller-config").hidden =
-          program !== "scroller";
+          !isProgramSelected("scroller");
         document.getElementById("fireworks-config").hidden =
-          program !== "fireworks";
+          !isProgramSelected("fireworks");
         document.getElementById("maze-hero-config").hidden =
-          program !== "maze_hero";
-        document.getElementById("fireworks-brightness-config").hidden =
-          program !== "fireworks";
+          !isProgramSelected("maze_hero");
         document.getElementById("brightness-label").textContent =
-          program === "fireworks" ? "Min brightness" : "Brightness";
+          isProgramSelected("fireworks") ? "Min brightness" : "Brightness";
         document.getElementById("brightness-hint").textContent =
-          program === "fireworks"
+          isProgramSelected("fireworks")
             ? "Baseline brightness for text and the dimmest Fireworks frames."
             : "Baseline brightness for text and animations.";
       }
@@ -692,7 +780,10 @@
             SETUP_STORAGE_KEY,
             JSON.stringify({
               ssid: document.getElementById("ssid").value,
-              program: document.getElementById("program").value,
+              selectedPrograms: selectedPrograms(),
+              programDurationMinutes: document.getElementById(
+                "program-duration-minutes",
+              ).value,
               scrollMessage: document.getElementById("scroll-message").value,
               scrollSpeed: document.getElementById("scroll-speed").value,
               fireworksMinDelay: document.getElementById("fireworks-min-delay")
@@ -725,8 +816,18 @@
           if (!raw) return;
           var d = JSON.parse(raw);
           if (d.ssid != null) document.getElementById("ssid").value = d.ssid;
-          if (d.program != null)
-            document.getElementById("program").value = d.program;
+          if (Array.isArray(d.selectedPrograms)) {
+            setSelectedPrograms(
+              d.selectedPrograms.filter(function (program) {
+                return PROGRAM_IDS.indexOf(program) !== -1;
+              }),
+            );
+          } else if (d.program != null && PROGRAM_IDS.indexOf(d.program) !== -1) {
+            setSelectedPrograms([d.program]);
+          }
+          if (d.programDurationMinutes != null)
+            document.getElementById("program-duration-minutes").value =
+              d.programDurationMinutes;
           if (d.scrollMessage != null)
             document.getElementById("scroll-message").value = d.scrollMessage;
           if (d.scrollSpeed != null)
@@ -773,7 +874,10 @@
       function bindSetupPersist() {
         [
           "ssid",
-          "program",
+          "program-scroller",
+          "program-fireworks",
+          "program-maze-hero",
+          "program-duration-minutes",
           "scroll-message",
           "scroll-speed",
           "fireworks-min-delay",
@@ -790,7 +894,7 @@
         ].forEach(function (id) {
           var el = document.getElementById(id);
           el.addEventListener("input", persistSetupForm);
-          if (el.tagName === "SELECT") {
+          if (el.type === "checkbox") {
             el.addEventListener("change", function () {
               updateProgramConfigVisibility();
               persistSetupForm();
@@ -802,11 +906,17 @@
         document.getElementById(id).value = value;
       }
       function resetProgramDefaults() {
-        var program = document.getElementById("program").value;
-        if (program === "scroller") {
+        var programs = selectedPrograms();
+        if (!programs.length) {
+          programs = defaultSelectedPrograms();
+          setSelectedPrograms(programs);
+          updateProgramConfigVisibility();
+        }
+        if (programs.indexOf("scroller") !== -1) {
           setValue("scroll-message", PROGRAM_DEFAULTS.scroller.scrollMessage);
           setValue("scroll-speed", PROGRAM_DEFAULTS.scroller.scrollSpeed);
-        } else if (program === "fireworks") {
+        }
+        if (programs.indexOf("fireworks") !== -1) {
           setValue(
             "fireworks-min-delay",
             PROGRAM_DEFAULTS.fireworks.fireworksMinDelay,
@@ -823,7 +933,8 @@
             "fireworks-max-brightness",
             PROGRAM_DEFAULTS.fireworks.fireworksMaxBrightness,
           );
-        } else if (program === "maze_hero") {
+        }
+        if (programs.indexOf("maze_hero") !== -1) {
           setValue("maze-min-width", PROGRAM_DEFAULTS.maze_hero.mazeMinWidth);
           setValue("maze-max-width", PROGRAM_DEFAULTS.maze_hero.mazeMaxWidth);
           setValue("maze-min-height", PROGRAM_DEFAULTS.maze_hero.mazeMinHeight);
@@ -841,9 +952,7 @@
         persistSetupForm();
         var msg = document.getElementById("msg");
         msg.className = "msg info";
-        msg.textContent =
-          (PROGRAM_LABELS[program] || "Program") +
-          " settings reset in this browser.";
+        msg.textContent = "Selected program settings reset in this browser.";
       }
       function barsHtml(rssi) {
         var lvl = rssi > -55 ? 4 : rssi > -65 ? 3 : rssi > -75 ? 2 : 1;
@@ -924,7 +1033,11 @@
       function save() {
         var s = document.getElementById("ssid").value.trim();
         var p = document.getElementById("pw").value;
-        var program = document.getElementById("program").value;
+        var programs = selectedPrograms();
+        var program = programs.length ? programs[0] : "";
+        var programDurationMinutes = parseFloat(
+          document.getElementById("program-duration-minutes").value,
+        );
         var scrollMessage = document
           .getElementById("scroll-message")
           .value.trim();
@@ -982,7 +1095,21 @@
           msg.textContent = "Min brightness must be 0-15.";
           return;
         }
-        if (program === "scroller") {
+        if (!programs.length) {
+          msg.className = "msg err";
+          msg.textContent = "Select at least one program.";
+          return;
+        }
+        if (
+          isNaN(programDurationMinutes) ||
+          programDurationMinutes <= 0 ||
+          programDurationMinutes > 43200
+        ) {
+          msg.className = "msg err";
+          msg.textContent = "Program duration must be > 0 and <= 43200.";
+          return;
+        }
+        if (isProgramSelected("scroller")) {
           if (scrollMessage.length > 64) {
             msg.className = "msg err";
             msg.textContent = "Scroll message must be 64 characters or fewer.";
@@ -993,7 +1120,8 @@
             msg.textContent = "Scroll speed must be greater than 0.";
             return;
           }
-        } else if (program === "fireworks") {
+        }
+        if (isProgramSelected("fireworks")) {
           if (!fireworksMinDelay || fireworksMinDelay <= 0) {
             msg.className = "msg err";
             msg.textContent = "Min launch delay must be greater than 0.";
@@ -1019,7 +1147,8 @@
             msg.textContent = "Max brightness must be min brightness to 15.";
             return;
           }
-        } else if (program === "maze_hero") {
+        }
+        if (isProgramSelected("maze_hero")) {
           if (
             !mazeMinWidth ||
             !mazeMinHeight ||
@@ -1067,6 +1196,16 @@
           encodeURIComponent(p) +
           "&program=" +
           encodeURIComponent(program) +
+          "&selectedPrograms=" +
+          encodeURIComponent(programs.join(",")) +
+          "&programScroller=" +
+          (isProgramSelected("scroller") ? "1" : "0") +
+          "&programFireworks=" +
+          (isProgramSelected("fireworks") ? "1" : "0") +
+          "&programMazeHero=" +
+          (isProgramSelected("maze_hero") ? "1" : "0") +
+          "&programDurationMinutes=" +
+          encodeURIComponent(programDurationMinutes) +
           "&scrollMessage=" +
           encodeURIComponent(scrollMessage) +
           "&scrollSpeed=" +
@@ -1147,8 +1286,11 @@
         fd.append("firmware", file, file.name);
         xhr.send(fd);
       }
-      document.getElementById("program").value = SERVER_PROGRAM;
+      setSelectedPrograms(defaultSelectedPrograms());
       restoreSetupForm();
+      if (!selectedPrograms().length) {
+        setSelectedPrograms(defaultSelectedPrograms());
+      }
       updateProgramConfigVisibility();
       bindSetupPersist();
     </script>

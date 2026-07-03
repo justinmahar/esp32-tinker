@@ -20,12 +20,15 @@ constexpr unsigned long VICTORY_TOTAL_MS =
     VICTORY_ZOOM_IN_MS + VICTORY_HOLD_MS + VICTORY_EXIT_MS;
 
 struct ZoomView {
-  ZoomView() : focusX(0), focusY(0), zoomQ8(0) {}
+  ZoomView() : focusXQ8(0), focusYQ8(0), zoomQ8(0) {}
   ZoomView(int16_t focusX, int16_t focusY, uint16_t zoomQ8)
-      : focusX(focusX), focusY(focusY), zoomQ8(zoomQ8) {}
+      : focusXQ8((int32_t)focusX * 256L),
+        focusYQ8((int32_t)focusY * 256L), zoomQ8(zoomQ8) {}
+  ZoomView(int32_t focusXQ8, int32_t focusYQ8, uint16_t zoomQ8)
+      : focusXQ8(focusXQ8), focusYQ8(focusYQ8), zoomQ8(zoomQ8) {}
 
-  int16_t focusX;
-  int16_t focusY;
+  int32_t focusXQ8;
+  int32_t focusYQ8;
   uint16_t zoomQ8;
 };
 
