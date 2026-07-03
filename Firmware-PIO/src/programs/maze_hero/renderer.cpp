@@ -352,8 +352,8 @@ void drawEnteringHero(const Maze &maze, Coord hero, uint16_t width,
 uint16_t Renderer::viewWidth() const { return matrix()->getColumnCount(); }
 
 void Renderer::renderPlaying(const Maze &maze, const FogOfWar &fog,
-                             const Camera &camera, Coord hero,
-                             uint8_t frame) const {
+                             const Camera &camera, int16_t heroWorldX,
+                             int16_t heroWorldY, uint8_t frame) const {
   uint16_t width = viewWidth();
   uint8_t height = viewHeight();
   beginFrame();
@@ -365,8 +365,8 @@ void Renderer::renderPlaying(const Maze &maze, const FogOfWar &fog,
     }
   }
 
-  int16_t heroRow = screenY(maze, camera, cellCenterY(hero), height);
-  int16_t heroCol = screenX(maze, camera, cellCenterX(hero), width);
+  int16_t heroRow = screenY(maze, camera, heroWorldY, height);
+  int16_t heroCol = screenX(maze, camera, heroWorldX, width);
   setPixel(heroRow, heroCol);
 
   endFrame();

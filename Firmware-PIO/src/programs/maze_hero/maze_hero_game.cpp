@@ -22,6 +22,8 @@ struct Game {
   Renderer renderer;
   HeroAi ai;
   Coord hero;
+  int16_t heroWorldX = 0;
+  int16_t heroWorldY = 0;
   GameState state = GameState::Playing;
   bool seeded = false;
   uint8_t frame = 0;
@@ -33,6 +35,40 @@ struct Game {
 };
 
 Game game;
+
+int16_t approach(int16_t current, int16_t target) {
+  if (current < target) {
+    return current + 1;
+  }
+  if (current > target) {
+    return current - 1;
+  }
+  return current;
+}
+
+int16_t heroPixelX(Coord hero) { return hero.x * 2 + 1; }
+
+int16_t heroPixelY(Coord hero) { return hero.y * 2 + 1; }
+
+bool heroDrawnAtTarget() {
+  return game.heroWorldX == heroPixelX(game.hero) &&
+         game.heroWorldY == heroPixelY(game.hero);
+}
+
+bool stepHeroTowardTarget() {
+  int16_t nextX = approach(game.heroWorldX, heroPixelX(game.hero));
+  int16_t nextY = approach(game.heroWorldY, heroPixelY(game.hero));
+  bool changed = nextX != game.heroWorldX || nextY != game.heroWorldY;
+  game.heroWorldX = nextX;
+  game.heroWorldY = nextY;
+  return changed;
+}
+
+void startVictory(unsigned long now) {
+  game.state = GameState::VictoryAnimation;
+  game.victoryStartMs = now;
+  game.lastRenderMs = 0;
+}
 
 unsigned long randomHeroSpeedMs(const ProgramConfig &cfg) {
   unsigned long minSpeedMs =
@@ -48,6 +84,8 @@ void startNewMaze(const ProgramConfig &cfg) {
   game.maze.generate(cfg.mazeMinWidth, cfg.mazeMaxWidth, cfg.mazeMinHeight,
                      cfg.mazeMaxHeight);
   game.hero = game.maze.start();
+  game.heroWorldX = heroPixelX(game.hero);
+  game.heroWorldY = heroPixelY(game.hero);
   game.ai.reset();
   game.fog.reset(game.maze);
   game.fog.markHeroVisited(game.maze, game.hero);
@@ -82,7 +120,12 @@ void tickIntro(unsigned long now) {
 }
 
 void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
-  if (now - game.lastMoveMs >= game.moveDelayMs) {
+  if (heroDrawnAtTarget() && sameCoord(game.hero, game.maze.finish())) {
+    startVictory(now);
+    return;
+  }
+
+  if (heroDrawnAtTarget() && now - game.lastMoveMs >= game.moveDelayMs) {
     Coord next;
     unsigned long decisionDelayMs = game.moveDelayMs;
     if (game.ai.chooseNextStep(game.maze, game.fog, game.hero, now,
@@ -94,19 +137,15 @@ void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
       game.fog.revealFrom(game.maze, game.hero);
       game.camera.updateTarget(game.maze, game.renderer.viewWidth(),
                                game.renderer.viewHeight(), game.hero);
-
-      if (sameCoord(game.hero, game.maze.finish())) {
-        game.state = GameState::VictoryAnimation;
-        game.victoryStartMs = now;
-        game.lastRenderMs = 0;
-      }
     }
   }
 
   if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
     game.lastRenderMs = now;
+    stepHeroTowardTarget();
     game.camera.stepTowardTarget();
-    game.renderer.renderPlaying(game.maze, game.fog, game.camera, game.hero,
+    game.renderer.renderPlaying(game.maze, game.fog, game.camera,
+                                game.heroWorldX, game.heroWorldY,
                                 game.frame++);
   }
 }

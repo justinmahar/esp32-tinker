@@ -25,7 +25,8 @@ public:
   uint8_t viewHeight() const { return DISPLAY_HEIGHT; }
 
   void renderPlaying(const Maze &maze, const FogOfWar &fog,
-                     const Camera &camera, Coord hero, uint8_t frame) const;
+                     const Camera &camera, int16_t heroWorldX,
+                     int16_t heroWorldY, uint8_t frame) const;
   void renderIntro(const Maze &maze, const FogOfWar &fog, const Camera &camera,
                    Coord hero, unsigned long elapsedMs, uint8_t frame) const;
   void renderVictory(const Maze &maze, const FogOfWar &fog,

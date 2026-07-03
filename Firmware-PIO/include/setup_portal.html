@@ -210,6 +210,21 @@
       .btn-ota:hover {
         background: #252525;
       }
+      .btn-reset {
+        width: 100%;
+        background: #1c1c1c;
+        color: #e8e8e8;
+        border: 1px solid #2e2e2e;
+        border-radius: 8px;
+        padding: 9px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 4px;
+      }
+      .btn-reset:hover {
+        background: #252525;
+      }
       .msg {
         font-size: 13px;
         text-align: center;
@@ -573,6 +588,9 @@
             </div>
           </div>
         </div>
+        <button class="btn-reset" type="button" onclick="resetProgramDefaults()">
+          Reset selected program to defaults
+        </button>
         <div class="divider"></div>
         <div class="section">Display</div>
         <div>
@@ -626,6 +644,31 @@
     <script>
       var SETUP_STORAGE_KEY = "esp32TinkerSetup";
       var SERVER_PROGRAM = "PROGRAM_PLACEHOLDER";
+      var PROGRAM_DEFAULTS = {
+        scroller: {
+          scrollMessage: "",
+          scrollSpeed: "75",
+        },
+        fireworks: {
+          fireworksMinDelay: "60",
+          fireworksMaxDelay: "2000",
+          fireworksAnimMs: "60",
+          fireworksMaxBrightness: "15",
+        },
+        maze_hero: {
+          mazeMinWidth: "8",
+          mazeMaxWidth: "40",
+          mazeMinHeight: "4",
+          mazeMaxHeight: "24",
+          mazeHeroMinSpeed: "200",
+          mazeHeroMaxSpeed: "200",
+        },
+      };
+      var PROGRAM_LABELS = {
+        scroller: "Simple Scroller",
+        fireworks: "Fireworks",
+        maze_hero: "Maze Hero",
+      };
       function updateProgramConfigVisibility() {
         var program = document.getElementById("program").value;
         document.getElementById("scroller-config").hidden =
@@ -754,6 +797,53 @@
             });
           }
         });
+      }
+      function setValue(id, value) {
+        document.getElementById(id).value = value;
+      }
+      function resetProgramDefaults() {
+        var program = document.getElementById("program").value;
+        if (program === "scroller") {
+          setValue("scroll-message", PROGRAM_DEFAULTS.scroller.scrollMessage);
+          setValue("scroll-speed", PROGRAM_DEFAULTS.scroller.scrollSpeed);
+        } else if (program === "fireworks") {
+          setValue(
+            "fireworks-min-delay",
+            PROGRAM_DEFAULTS.fireworks.fireworksMinDelay,
+          );
+          setValue(
+            "fireworks-max-delay",
+            PROGRAM_DEFAULTS.fireworks.fireworksMaxDelay,
+          );
+          setValue(
+            "fireworks-anim-ms",
+            PROGRAM_DEFAULTS.fireworks.fireworksAnimMs,
+          );
+          setValue(
+            "fireworks-max-brightness",
+            PROGRAM_DEFAULTS.fireworks.fireworksMaxBrightness,
+          );
+        } else if (program === "maze_hero") {
+          setValue("maze-min-width", PROGRAM_DEFAULTS.maze_hero.mazeMinWidth);
+          setValue("maze-max-width", PROGRAM_DEFAULTS.maze_hero.mazeMaxWidth);
+          setValue("maze-min-height", PROGRAM_DEFAULTS.maze_hero.mazeMinHeight);
+          setValue("maze-max-height", PROGRAM_DEFAULTS.maze_hero.mazeMaxHeight);
+          setValue(
+            "maze-hero-min-speed",
+            PROGRAM_DEFAULTS.maze_hero.mazeHeroMinSpeed,
+          );
+          setValue(
+            "maze-hero-max-speed",
+            PROGRAM_DEFAULTS.maze_hero.mazeHeroMaxSpeed,
+          );
+        }
+
+        persistSetupForm();
+        var msg = document.getElementById("msg");
+        msg.className = "msg info";
+        msg.textContent =
+          (PROGRAM_LABELS[program] || "Program") +
+          " settings reset in this browser.";
       }
       function barsHtml(rssi) {
         var lvl = rssi > -55 ? 4 : rssi > -65 ? 3 : rssi > -75 ? 2 : 1;
