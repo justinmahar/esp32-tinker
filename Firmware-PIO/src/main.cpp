@@ -21,7 +21,7 @@
 #define WIFI_TIMEOUT_MS 15000
 #define WOKWI_SETUP_TIMEOUT_MS 8000
 
-const bool ENABLE_WOKWI_SETUP = false;
+const bool ENABLE_WOKWI_SETUP = true;
 
 const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
 const unsigned int DEFAULT_FIREWORKS_MIN_LAUNCH_DELAY_MS = 60;
@@ -209,7 +209,7 @@ void handleSave() {
 
     newConfig.scrollMessage = scrollMessage;
     newConfig.scrollSpeedMs = scrollSpeedMs;
-  } else {
+  } else if (newConfig.program == ProgramId::Fireworks) {
     unsigned int fireworksMinLaunchDelayMs =
         server.arg("fireworksMinDelay").toInt();
     unsigned int fireworksMaxLaunchDelayMs =
