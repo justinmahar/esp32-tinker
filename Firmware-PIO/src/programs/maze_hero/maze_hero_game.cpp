@@ -13,9 +13,29 @@ namespace MazeHero {
 namespace {
 
 constexpr unsigned long RENDER_FRAME_MS = 45UL;
+constexpr uint8_t RUNNER_ZOOM_CHANCE_PER_ROLL_PERCENT = 25;
+constexpr unsigned long RUNNER_ZOOM_CHANCE_INTERVAL_MS = 6000UL;
+constexpr unsigned long RUNNER_ZOOM_MIN_GAP_MS = 10000UL;
+constexpr uint16_t RUNNER_ZOOM_TARGET_PERCENT = 350U;
+constexpr unsigned long RUNNER_ZOOM_IN_MIN_MS = 1600UL;
+constexpr unsigned long RUNNER_ZOOM_IN_MAX_MS = 2800UL;
+constexpr unsigned long RUNNER_ZOOM_HOLD_MIN_MS = 2500UL;
+constexpr unsigned long RUNNER_ZOOM_HOLD_MAX_MS = 5000UL;
+constexpr unsigned long RUNNER_ZOOM_OUT_MIN_MS = 1600UL;
+constexpr unsigned long RUNNER_ZOOM_OUT_MAX_MS = 2800UL;
 
 enum class GameState : uint8_t { IntroAnimation, Playing, VictoryAnimation };
 enum class MovementPhase : uint8_t { IdleAtCell, CrossingPassage };
+
+struct RunnerZoomState {
+  bool active = false;
+  unsigned long startMs = 0;
+  unsigned long lastRollMs = 0;
+  unsigned long lastEndMs = 0;
+  unsigned long zoomInMs = 0;
+  unsigned long holdMs = 0;
+  unsigned long zoomOutMs = 0;
+};
 
 struct Game {
   Maze maze;
@@ -36,6 +56,8 @@ struct Game {
   unsigned long lastRenderMs = 0;
   unsigned long introStartMs = 0;
   unsigned long victoryStartMs = 0;
+  RunnerZoomState runnerZoom;
+  ZoomView victoryStartView;
 };
 
 Game game;
@@ -66,7 +88,88 @@ void completeCellArrival() {
   game.movementPhase = MovementPhase::IdleAtCell;
 }
 
+unsigned long runnerZoomTotalMs() {
+  return game.runnerZoom.zoomInMs + game.runnerZoom.holdMs +
+         game.runnerZoom.zoomOutMs;
+}
+
+unsigned long randomRangeInclusive(unsigned long minValue,
+                                   unsigned long maxValue) {
+  if (maxValue < minValue) {
+    maxValue = minValue;
+  }
+  return random(minValue, maxValue + 1);
+}
+
+PlayZoomFrame currentRunnerZoomFrame(unsigned long now) {
+  PlayZoomFrame frame;
+  if (!game.runnerZoom.active) {
+    return frame;
+  }
+
+  frame.active = true;
+  frame.elapsedMs = now - game.runnerZoom.startMs;
+  frame.zoomInMs = game.runnerZoom.zoomInMs;
+  frame.holdMs = game.runnerZoom.holdMs;
+  frame.zoomOutMs = game.runnerZoom.zoomOutMs;
+  frame.targetZoomPercent = RUNNER_ZOOM_TARGET_PERCENT;
+  return frame;
+}
+
+void resetRunnerZoom(unsigned long now) {
+  game.runnerZoom.active = false;
+  game.runnerZoom.startMs = 0;
+  game.runnerZoom.lastRollMs = now;
+  game.runnerZoom.lastEndMs = now;
+  game.runnerZoom.zoomInMs = 0;
+  game.runnerZoom.holdMs = 0;
+  game.runnerZoom.zoomOutMs = 0;
+}
+
+void updateRunnerZoom(unsigned long now) {
+  if (!game.runnerZoom.active) {
+    return;
+  }
+
+  if (now - game.runnerZoom.startMs >= runnerZoomTotalMs()) {
+    game.runnerZoom.active = false;
+    game.runnerZoom.lastEndMs = now;
+    game.runnerZoom.lastRollMs = now;
+  }
+}
+
+void maybeStartRunnerZoom(unsigned long now) {
+  if (game.runnerZoom.active || sameCoord(game.hero, game.maze.finish())) {
+    return;
+  }
+  if (now - game.runnerZoom.lastEndMs < RUNNER_ZOOM_MIN_GAP_MS) {
+    return;
+  }
+  if (now - game.runnerZoom.lastRollMs < RUNNER_ZOOM_CHANCE_INTERVAL_MS) {
+    return;
+  }
+
+  game.runnerZoom.lastRollMs = now;
+  if (random(100) >= RUNNER_ZOOM_CHANCE_PER_ROLL_PERCENT) {
+    return;
+  }
+
+  game.runnerZoom.active = true;
+  game.runnerZoom.startMs = now;
+  game.runnerZoom.zoomInMs =
+      randomRangeInclusive(RUNNER_ZOOM_IN_MIN_MS, RUNNER_ZOOM_IN_MAX_MS);
+  game.runnerZoom.holdMs =
+      randomRangeInclusive(RUNNER_ZOOM_HOLD_MIN_MS, RUNNER_ZOOM_HOLD_MAX_MS);
+  game.runnerZoom.zoomOutMs =
+      randomRangeInclusive(RUNNER_ZOOM_OUT_MIN_MS, RUNNER_ZOOM_OUT_MAX_MS);
+}
+
 void startVictory(unsigned long now) {
+  PlayZoomFrame zoomFrame = currentRunnerZoomFrame(now);
+  game.victoryStartView =
+      game.renderer.playZoomView(game.maze, game.camera, game.heroWorldX,
+                                 game.heroWorldY, zoomFrame);
+  resetRunnerZoom(now);
   game.state = GameState::VictoryAnimation;
   game.victoryStartMs = now;
   game.lastRenderMs = 0;
@@ -95,6 +198,10 @@ void startNewMaze(const ProgramConfig &cfg) {
   game.fog.revealFrom(game.maze, game.hero);
   game.camera.reset(game.maze, game.renderer.viewWidth(),
                     game.renderer.viewHeight(), game.hero);
+  resetRunnerZoom(now);
+  game.victoryStartView =
+      game.renderer.playZoomView(game.maze, game.camera, game.heroWorldX,
+                                 game.heroWorldY, currentRunnerZoomFrame(now));
   game.state = GameState::IntroAnimation;
   game.movementPhase = MovementPhase::IdleAtCell;
   game.frame = 0;
@@ -124,11 +231,15 @@ void tickIntro(unsigned long now) {
 }
 
 void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
+  updateRunnerZoom(now);
+
   if (game.movementPhase == MovementPhase::IdleAtCell &&
       sameCoord(game.hero, game.maze.finish())) {
     startVictory(now);
     return;
   }
+
+  maybeStartRunnerZoom(now);
 
   if (now - game.lastMoveMs >= game.moveDelayMs) {
     if (game.movementPhase == MovementPhase::CrossingPassage) {
@@ -157,9 +268,10 @@ void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
   if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
     game.lastRenderMs = now;
     game.camera.stepTowardTarget();
+    PlayZoomFrame zoomFrame = currentRunnerZoomFrame(now);
     game.renderer.renderPlaying(game.maze, game.fog, game.camera,
                                 game.heroWorldX, game.heroWorldY,
-                                game.frame++);
+                                zoomFrame, game.frame++);
   }
 }
 
@@ -172,8 +284,8 @@ void tickVictory(const ProgramConfig &cfg, unsigned long now) {
 
   if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
     game.lastRenderMs = now;
-    game.renderer.renderVictory(game.maze, game.fog, game.camera, game.hero,
-                                elapsedMs, game.frame++);
+    game.renderer.renderVictory(game.maze, game.fog, game.victoryStartView,
+                                game.hero, elapsedMs, game.frame++);
   }
 }
 
