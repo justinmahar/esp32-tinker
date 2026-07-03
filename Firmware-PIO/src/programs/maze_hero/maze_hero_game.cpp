@@ -27,6 +27,14 @@ constexpr unsigned long RUNNER_ZOOM_OUT_MAX_MS = 2800UL;
 enum class GameState : uint8_t { IntroAnimation, Playing, VictoryAnimation };
 enum class MovementPhase : uint8_t { IdleAtCell, CrossingPassage };
 
+struct HeroRenderPosition {
+  HeroRenderPosition() : xQ8(0), yQ8(0) {}
+  HeroRenderPosition(int32_t xQ8, int32_t yQ8) : xQ8(xQ8), yQ8(yQ8) {}
+
+  int32_t xQ8;
+  int32_t yQ8;
+};
+
 struct RunnerZoomState {
   bool active = false;
   unsigned long startMs = 0;
@@ -65,6 +73,37 @@ Game game;
 bool heroAtPendingCellCenter() {
   return game.heroWorldX == cellCenterX(game.pendingHero) &&
          game.heroWorldY == cellCenterY(game.pendingHero);
+}
+
+int32_t worldQ8(int16_t value) { return (int32_t)value * 256L; }
+
+uint8_t moveProgressQ8(unsigned long now) {
+  if (game.moveDelayMs == 0) {
+    return 255;
+  }
+  unsigned long elapsedMs = now - game.lastMoveMs;
+  if (elapsedMs >= game.moveDelayMs) {
+    return 255;
+  }
+  return (uint8_t)((elapsedMs * 255UL) / game.moveDelayMs);
+}
+
+int32_t lerpWorldQ8(int16_t from, int16_t to, uint8_t progress) {
+  return worldQ8(from) + ((int32_t)(to - from) * 256L * progress) / 255L;
+}
+
+HeroRenderPosition currentHeroRenderPosition(unsigned long now) {
+  if (game.movementPhase != MovementPhase::CrossingPassage) {
+    return {worldQ8(game.heroWorldX), worldQ8(game.heroWorldY)};
+  }
+
+  int16_t nextWorldX =
+      approachOnePixel(game.heroWorldX, cellCenterX(game.pendingHero));
+  int16_t nextWorldY =
+      approachOnePixel(game.heroWorldY, cellCenterY(game.pendingHero));
+  uint8_t progress = moveProgressQ8(now);
+  return {lerpWorldQ8(game.heroWorldX, nextWorldX, progress),
+          lerpWorldQ8(game.heroWorldY, nextWorldY, progress)};
 }
 
 unsigned long randomHeroSpeedMs(const ProgramConfig &cfg);
@@ -167,8 +206,9 @@ void maybeStartRunnerZoom(unsigned long now) {
 void startVictory(unsigned long now) {
   PlayZoomFrame zoomFrame = currentRunnerZoomFrame(now);
   game.victoryStartView =
-      game.renderer.playZoomView(game.maze, game.camera, game.heroWorldX,
-                                 game.heroWorldY, zoomFrame);
+      game.renderer.playZoomView(game.maze, game.camera,
+                                 worldQ8(game.heroWorldX),
+                                 worldQ8(game.heroWorldY), zoomFrame);
   resetRunnerZoom(now);
   game.state = GameState::VictoryAnimation;
   game.victoryStartMs = now;
@@ -200,8 +240,10 @@ void startNewMaze(const ProgramConfig &cfg) {
                     game.renderer.viewHeight(), game.hero);
   resetRunnerZoom(now);
   game.victoryStartView =
-      game.renderer.playZoomView(game.maze, game.camera, game.heroWorldX,
-                                 game.heroWorldY, currentRunnerZoomFrame(now));
+      game.renderer.playZoomView(game.maze, game.camera,
+                                 worldQ8(game.heroWorldX),
+                                 worldQ8(game.heroWorldY),
+                                 currentRunnerZoomFrame(now));
   game.state = GameState::IntroAnimation;
   game.movementPhase = MovementPhase::IdleAtCell;
   game.frame = 0;
@@ -269,9 +311,11 @@ void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
     game.lastRenderMs = now;
     game.camera.stepTowardTarget();
     PlayZoomFrame zoomFrame = currentRunnerZoomFrame(now);
+    HeroRenderPosition heroRender = currentHeroRenderPosition(now);
     game.renderer.renderPlaying(game.maze, game.fog, game.camera,
                                 game.heroWorldX, game.heroWorldY,
-                                zoomFrame, game.frame++);
+                                heroRender.xQ8, heroRender.yQ8, zoomFrame,
+                                game.frame++);
   }
 }
 

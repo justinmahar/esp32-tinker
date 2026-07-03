@@ -151,6 +151,10 @@ int16_t oldMazePixelToCloseup(int16_t oldWorld) {
   return ((oldWorld - 1) * CLOSEUP_CELL_PITCH) / 2;
 }
 
+int32_t oldMazePixelQ8ToCloseupQ8(int32_t oldWorldQ8) {
+  return ((oldWorldQ8 - 256L) * CLOSEUP_CELL_PITCH) / 2L;
+}
+
 int16_t playCameraFocusX(const Maze &maze, const Camera &camera,
                          uint16_t viewWidth) {
   int16_t oldWorldX =
@@ -177,6 +181,14 @@ int16_t worldToScreen(int16_t world, int16_t focus, uint16_t zoomQ8,
                       int16_t center2) {
   int16_t doubledScreenDelta =
       ((int32_t)(world - focus) * zoomQ8) / (CLOSEUP_CELL_PITCH * 128L);
+  return (doubledScreenDelta + center2 + 1) / 2;
+}
+
+int16_t worldQ8ToScreen(int32_t worldQ8, int16_t focus, uint16_t zoomQ8,
+                        int16_t center2) {
+  int32_t focusQ8 = (int32_t)focus * 256L;
+  int32_t doubledScreenDelta =
+      ((worldQ8 - focusQ8) * zoomQ8) / (CLOSEUP_CELL_PITCH * 32768L);
   return (doubledScreenDelta + center2 + 1) / 2;
 }
 
@@ -318,14 +330,16 @@ void drawHeroAt(uint16_t width, uint8_t height, int16_t offsetX,
 }
 
 void drawZoomedScene(const Maze &maze, const FogOfWar &fog,
-                     const ZoomView &view, int16_t heroFocusX,
-                     int16_t heroFocusY, uint16_t width, uint8_t height) {
+                     const ZoomView &view, int32_t heroFocusXQ8,
+                     int32_t heroFocusYQ8, uint16_t width, uint8_t height) {
   drawCloseupMaze(maze, fog, view.focusX, view.focusY, view.zoomQ8, width,
                   height);
   int16_t heroCol =
-      worldToScreen(heroFocusX, view.focusX, view.zoomQ8, (int16_t)width - 1);
+      worldQ8ToScreen(heroFocusXQ8, view.focusX, view.zoomQ8,
+                      (int16_t)width - 1);
   int16_t heroRow =
-      worldToScreen(heroFocusY, view.focusY, view.zoomQ8, (int16_t)height - 1);
+      worldQ8ToScreen(heroFocusYQ8, view.focusY, view.zoomQ8,
+                      (int16_t)height - 1);
   drawHeroAtScreen(heroCol, heroRow);
 }
 
@@ -358,7 +372,8 @@ void drawEnteringHero(const Maze &maze, Coord hero, uint16_t width,
 uint16_t Renderer::viewWidth() const { return matrix()->getColumnCount(); }
 
 ZoomView Renderer::playZoomView(const Maze &maze, const Camera &camera,
-                                int16_t heroWorldX, int16_t heroWorldY,
+                                int32_t heroRenderWorldXQ8,
+                                int32_t heroRenderWorldYQ8,
                                 const PlayZoomFrame &zoomFrame) const {
   uint16_t width = viewWidth();
   uint8_t height = viewHeight();
@@ -370,8 +385,10 @@ ZoomView Renderer::playZoomView(const Maze &maze, const Camera &camera,
     return normalView;
   }
 
-  int16_t heroFocusX = oldMazePixelToCloseup(heroWorldX);
-  int16_t heroFocusY = oldMazePixelToCloseup(heroWorldY);
+  int16_t heroFocusX =
+      oldMazePixelQ8ToCloseupQ8(heroRenderWorldXQ8) / 256L;
+  int16_t heroFocusY =
+      oldMazePixelQ8ToCloseupQ8(heroRenderWorldYQ8) / 256L;
   uint16_t targetZoomQ8 = zoomQ8FromPercent(zoomFrame.targetZoomPercent);
   unsigned long zoomOutStartMs = zoomFrame.zoomInMs + zoomFrame.holdMs;
 
@@ -398,6 +415,8 @@ ZoomView Renderer::playZoomView(const Maze &maze, const Camera &camera,
 void Renderer::renderPlaying(const Maze &maze, const FogOfWar &fog,
                              const Camera &camera, int16_t heroWorldX,
                              int16_t heroWorldY,
+                             int32_t heroRenderWorldXQ8,
+                             int32_t heroRenderWorldYQ8,
                              const PlayZoomFrame &zoomFrame,
                              uint8_t frame) const {
   (void)frame;
@@ -406,10 +425,12 @@ void Renderer::renderPlaying(const Maze &maze, const FogOfWar &fog,
   beginFrame();
 
   if (playZoomFrameVisible(zoomFrame)) {
-    ZoomView view = playZoomView(maze, camera, heroWorldX, heroWorldY,
-                                 zoomFrame);
-    drawZoomedScene(maze, fog, view, oldMazePixelToCloseup(heroWorldX),
-                    oldMazePixelToCloseup(heroWorldY), width, height);
+    ZoomView view = playZoomView(maze, camera, heroRenderWorldXQ8,
+                                 heroRenderWorldYQ8, zoomFrame);
+    drawZoomedScene(maze, fog, view,
+                    oldMazePixelQ8ToCloseupQ8(heroRenderWorldXQ8),
+                    oldMazePixelQ8ToCloseupQ8(heroRenderWorldYQ8), width,
+                    height);
   } else {
     for (uint8_t y = 0; y < maze.height(); y++) {
       for (uint8_t x = 0; x < maze.width(); x++) {
@@ -455,7 +476,8 @@ void Renderer::renderIntro(const Maze &maze, const FogOfWar &fog,
                      lerpInt16(heroFocusY, endFocusY, eased),
                      lerpQ8(CLOSEUP_HOLD_ZOOM_Q8, CLOSEUP_START_ZOOM_Q8,
                             eased)};
-    drawZoomedScene(maze, fog, view, heroFocusX, heroFocusY, width, height);
+    drawZoomedScene(maze, fog, view, (int32_t)heroFocusX * 256L,
+                    (int32_t)heroFocusY * 256L, width, height);
   }
   endFrame();
 }
@@ -475,10 +497,12 @@ void Renderer::renderVictory(const Maze &maze, const FogOfWar &fog,
     ZoomView view = {lerpInt16(startView.focusX, heroFocusX, eased),
                      lerpInt16(startView.focusY, heroFocusY, eased),
                      lerpQ8(startView.zoomQ8, CLOSEUP_HOLD_ZOOM_Q8, eased)};
-    drawZoomedScene(maze, fog, view, heroFocusX, heroFocusY, width, height);
+    drawZoomedScene(maze, fog, view, (int32_t)heroFocusX * 256L,
+                    (int32_t)heroFocusY * 256L, width, height);
   } else if (elapsedMs < VICTORY_ZOOM_IN_MS + VICTORY_HOLD_MS) {
     ZoomView view = {heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8};
-    drawZoomedScene(maze, fog, view, heroFocusX, heroFocusY, width, height);
+    drawZoomedScene(maze, fog, view, (int32_t)heroFocusX * 256L,
+                    (int32_t)heroFocusY * 256L, width, height);
   } else {
     unsigned long exitElapsed =
         elapsedMs - VICTORY_ZOOM_IN_MS - VICTORY_HOLD_MS;

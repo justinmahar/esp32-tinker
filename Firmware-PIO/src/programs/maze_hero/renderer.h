@@ -48,11 +48,14 @@ public:
   uint8_t viewHeight() const { return DISPLAY_HEIGHT; }
 
   ZoomView playZoomView(const Maze &maze, const Camera &camera,
-                        int16_t heroWorldX, int16_t heroWorldY,
+                        int32_t heroRenderWorldXQ8,
+                        int32_t heroRenderWorldYQ8,
                         const PlayZoomFrame &zoomFrame) const;
   void renderPlaying(const Maze &maze, const FogOfWar &fog,
                      const Camera &camera, int16_t heroWorldX,
-                     int16_t heroWorldY, const PlayZoomFrame &zoomFrame,
+                     int16_t heroWorldY, int32_t heroRenderWorldXQ8,
+                     int32_t heroRenderWorldYQ8,
+                     const PlayZoomFrame &zoomFrame,
                      uint8_t frame) const;
   void renderIntro(const Maze &maze, const FogOfWar &fog, const Camera &camera,
                    Coord hero, unsigned long elapsedMs, uint8_t frame) const;
