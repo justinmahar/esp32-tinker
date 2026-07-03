@@ -6,8 +6,9 @@ static const char DEFAULT_SCROLL_MESSAGE[] = "ESP32 Tinker";
 static char scrollTextBuffer[MAX_SCROLL_MESSAGE_LENGTH + 1];
 
 static void copyScrollMessage(const ProgramConfig &cfg) {
-  const char *source = cfg.scrollMessage.length() > 0 ? cfg.scrollMessage.c_str()
-                                                      : DEFAULT_SCROLL_MESSAGE;
+  const char *source = cfg.scrollMessage.length() > 0
+                           ? cfg.scrollMessage.c_str()
+                           : DEFAULT_SCROLL_MESSAGE;
   strncpy(scrollTextBuffer, source, MAX_SCROLL_MESSAGE_LENGTH);
   scrollTextBuffer[MAX_SCROLL_MESSAGE_LENGTH] = '\0';
 }

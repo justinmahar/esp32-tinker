@@ -134,12 +134,6 @@ int16_t closeupCellCenterY(Coord coord) {
   return (int16_t)coord.y * CLOSEUP_CELL_PITCH;
 }
 
-int16_t screenToWorld(int16_t doubledScreenDelta, int16_t focus,
-                      uint16_t zoomQ8) {
-  return focus +
-         (int32_t)doubledScreenDelta * CLOSEUP_CELL_PITCH * 128L / zoomQ8;
-}
-
 bool insideRange(int16_t value, int16_t start, int16_t end) {
   return value >= start && value <= end;
 }
@@ -179,49 +173,87 @@ Coord focusCoord(const Maze &maze, int16_t focusX, int16_t focusY) {
   return {(uint8_t)x, (uint8_t)y};
 }
 
-bool insideHorizontalWall(int16_t worldX, int16_t worldY, int16_t centerX,
-                          int16_t wallY) {
-  return insideRange(worldY, wallY - CLOSEUP_WALL_HALF_THICKNESS,
-                     wallY + CLOSEUP_WALL_HALF_THICKNESS) &&
-         insideRange(worldX, centerX - CLOSEUP_CELL_PITCH / 2,
-                     centerX + CLOSEUP_CELL_PITCH / 2);
+int16_t worldToScreen(int16_t world, int16_t focus, uint16_t zoomQ8,
+                      int16_t center2) {
+  int16_t doubledScreenDelta =
+      ((int32_t)(world - focus) * zoomQ8) / (CLOSEUP_CELL_PITCH * 128L);
+  return (doubledScreenDelta + center2 + 1) / 2;
 }
 
-bool insideVerticalWall(int16_t worldX, int16_t worldY, int16_t wallX,
-                        int16_t centerY) {
-  return insideRange(worldX, wallX - CLOSEUP_WALL_HALF_THICKNESS,
-                     wallX + CLOSEUP_WALL_HALF_THICKNESS) &&
-         insideRange(worldY, centerY - CLOSEUP_CELL_PITCH / 2,
-                     centerY + CLOSEUP_CELL_PITCH / 2);
+void fillScreenRect(int16_t left, int16_t top, int16_t right, int16_t bottom,
+                    uint16_t width, uint8_t height) {
+  left = maxInt16(0, left);
+  top = maxInt16(0, top);
+  right = minInt16((int16_t)width - 1, right);
+  bottom = minInt16((int16_t)height - 1, bottom);
+  if (left > right || top > bottom) {
+    return;
+  }
+
+  for (int16_t row = top; row <= bottom; row++) {
+    for (int16_t col = left; col <= right; col++) {
+      setPixel(row, col);
+    }
+  }
 }
 
-bool insideCloseupWallSegment(const Maze &maze, Coord coord, int16_t worldX,
-                              int16_t worldY) {
+void drawCloseupWallRect(int16_t minWorldX, int16_t minWorldY,
+                         int16_t maxWorldX, int16_t maxWorldY,
+                         int16_t focusX, int16_t focusY, uint16_t zoomQ8,
+                         uint16_t width, uint8_t height) {
+  int16_t centerCol2 = (int16_t)width - 1;
+  int16_t centerRow2 = (int16_t)height - 1;
+  int16_t left = worldToScreen(minWorldX, focusX, zoomQ8, centerCol2);
+  int16_t right = worldToScreen(maxWorldX, focusX, zoomQ8, centerCol2);
+  int16_t top = worldToScreen(minWorldY, focusY, zoomQ8, centerRow2);
+  int16_t bottom = worldToScreen(maxWorldY, focusY, zoomQ8, centerRow2);
+  if (left > right) {
+    int16_t tmp = left;
+    left = right;
+    right = tmp;
+  }
+  if (top > bottom) {
+    int16_t tmp = top;
+    top = bottom;
+    bottom = tmp;
+  }
+  fillScreenRect(left, top, right, bottom, width, height);
+}
+
+void drawCloseupCellWalls(const Maze &maze, Coord coord, int16_t focusX,
+                          int16_t focusY, uint16_t zoomQ8, uint16_t width,
+                          uint8_t height) {
   int16_t centerX = closeupCellCenterX(coord);
   int16_t centerY = closeupCellCenterY(coord);
   int16_t halfPitch = CLOSEUP_CELL_PITCH / 2;
+  int16_t wall = CLOSEUP_WALL_HALF_THICKNESS;
 
-  if (maze.hasWall(coord, Direction::North) &&
-      insideHorizontalWall(worldX, worldY, centerX, centerY - halfPitch)) {
-    return true;
+  if (maze.hasWall(coord, Direction::North)) {
+    drawCloseupWallRect(centerX - halfPitch, centerY - halfPitch - wall,
+                        centerX + halfPitch, centerY - halfPitch + wall,
+                        focusX, focusY, zoomQ8, width, height);
   }
-  if (maze.hasWall(coord, Direction::East) &&
-      insideVerticalWall(worldX, worldY, centerX + halfPitch, centerY)) {
-    return true;
+  if (maze.hasWall(coord, Direction::East)) {
+    drawCloseupWallRect(centerX + halfPitch - wall, centerY - halfPitch,
+                        centerX + halfPitch + wall, centerY + halfPitch,
+                        focusX, focusY, zoomQ8, width, height);
   }
-  if (maze.hasWall(coord, Direction::South) &&
-      insideHorizontalWall(worldX, worldY, centerX, centerY + halfPitch)) {
-    return true;
+  if (maze.hasWall(coord, Direction::South)) {
+    drawCloseupWallRect(centerX - halfPitch, centerY + halfPitch - wall,
+                        centerX + halfPitch, centerY + halfPitch + wall,
+                        focusX, focusY, zoomQ8, width, height);
   }
-  if (maze.hasWall(coord, Direction::West) &&
-      insideVerticalWall(worldX, worldY, centerX - halfPitch, centerY)) {
-    return true;
+  if (maze.hasWall(coord, Direction::West)) {
+    drawCloseupWallRect(centerX - halfPitch - wall, centerY - halfPitch,
+                        centerX - halfPitch + wall, centerY + halfPitch,
+                        focusX, focusY, zoomQ8, width, height);
   }
-  return false;
 }
 
-bool isCloseupWall(const Maze &maze, Coord center, int16_t worldX,
-                   int16_t worldY) {
+void drawCloseupMaze(const Maze &maze, const FogOfWar &fog, int16_t focusX,
+                     int16_t focusY, uint16_t zoomQ8, uint16_t width,
+                     uint8_t height) {
+  Coord center = focusCoord(maze, focusX, focusY);
   int16_t startY = maxInt16(0, (int16_t)center.y - CLOSEUP_SAMPLE_RADIUS_CELLS);
   int16_t endY = minInt16((int16_t)maze.height() - 1,
                           (int16_t)center.y + CLOSEUP_SAMPLE_RADIUS_CELLS);
@@ -232,38 +264,12 @@ bool isCloseupWall(const Maze &maze, Coord center, int16_t worldX,
   for (int16_t y = startY; y <= endY; y++) {
     for (int16_t x = startX; x <= endX; x++) {
       Coord coord = {(uint8_t)x, (uint8_t)y};
-      if (insideCloseupWallSegment(maze, coord, worldX, worldY)) {
-        return true;
+      if (!fog.isDiscovered(maze, coord)) {
+        continue;
       }
+      drawCloseupCellWalls(maze, coord, focusX, focusY, zoomQ8, width, height);
     }
   }
-  return false;
-}
-
-void drawCloseupMaze(const Maze &maze, int16_t focusX, int16_t focusY,
-                     uint16_t zoomQ8, uint16_t width, uint8_t height) {
-  int16_t centerCol2 = (int16_t)width - 1;
-  int16_t centerRow2 = (int16_t)height - 1;
-  Coord center = focusCoord(maze, focusX, focusY);
-
-  for (uint8_t row = 0; row < height; row++) {
-    int16_t screenY2 = (int16_t)row * 2 - centerRow2;
-    int16_t worldY = screenToWorld(screenY2, focusY, zoomQ8);
-    for (uint16_t col = 0; col < width; col++) {
-      int16_t screenX2 = (int16_t)col * 2 - centerCol2;
-      int16_t worldX = screenToWorld(screenX2, focusX, zoomQ8);
-      if (isCloseupWall(maze, center, worldX, worldY)) {
-        setPixel(row, col);
-      }
-    }
-  }
-}
-
-int16_t worldToScreen(int16_t world, int16_t focus, uint16_t zoomQ8,
-                      int16_t center2) {
-  int16_t doubledScreenDelta =
-      ((int32_t)(world - focus) * zoomQ8) / (CLOSEUP_CELL_PITCH * 128L);
-  return (doubledScreenDelta + center2 + 1) / 2;
 }
 
 bool inCircle(int16_t row, int16_t col, int16_t centerRow, int16_t centerCol,
@@ -359,13 +365,6 @@ void Renderer::renderPlaying(const Maze &maze, const FogOfWar &fog,
     }
   }
 
-  Coord finish = maze.finish();
-  if (fog.isDiscovered(maze, finish) && (frame % 8) < 5) {
-    int16_t row = screenY(maze, camera, cellCenterY(finish), height);
-    int16_t col = screenX(maze, camera, cellCenterX(finish), width);
-    setPixel(row, col);
-  }
-
   int16_t heroRow = screenY(maze, camera, cellCenterY(hero), height);
   int16_t heroCol = screenX(maze, camera, cellCenterX(hero), width);
   setPixel(heroRow, heroCol);
@@ -373,7 +372,8 @@ void Renderer::renderPlaying(const Maze &maze, const FogOfWar &fog,
   endFrame();
 }
 
-void Renderer::renderIntro(const Maze &maze, const Camera &camera, Coord hero,
+void Renderer::renderIntro(const Maze &maze, const FogOfWar &fog,
+                           const Camera &camera, Coord hero,
                            unsigned long elapsedMs, uint8_t frame) const {
   (void)frame;
   uint16_t width = viewWidth();
@@ -382,13 +382,18 @@ void Renderer::renderIntro(const Maze &maze, const Camera &camera, Coord hero,
   int16_t heroFocusY = closeupCellCenterY(hero);
 
   beginFrame();
-  if (elapsedMs < INTRO_ENTER_MS) {
-    drawCloseupMaze(maze, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8, width,
-                    height);
+  if (elapsedMs < INTRO_PAUSE_MS) {
+    drawCloseupMaze(maze, fog, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8,
+                    width, height);
+    drawEnteringHero(maze, hero, width, height, 0);
+  } else if (elapsedMs < INTRO_PAUSE_MS + INTRO_ENTER_MS) {
+    unsigned long enterElapsed = elapsedMs - INTRO_PAUSE_MS;
+    drawCloseupMaze(maze, fog, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8,
+                    width, height);
     drawEnteringHero(maze, hero, width, height,
-                     progressQ8(elapsedMs, INTRO_ENTER_MS));
+                     progressQ8(enterElapsed, INTRO_ENTER_MS));
   } else {
-    unsigned long zoomElapsed = elapsedMs - INTRO_ENTER_MS;
+    unsigned long zoomElapsed = elapsedMs - INTRO_PAUSE_MS - INTRO_ENTER_MS;
     uint8_t eased = easeInOutQ8(progressQ8(zoomElapsed, INTRO_ZOOM_OUT_MS));
     int16_t endFocusX = playCameraFocusX(maze, camera, width);
     int16_t endFocusY = playCameraFocusY(maze, camera, height);
@@ -396,7 +401,7 @@ void Renderer::renderIntro(const Maze &maze, const Camera &camera, Coord hero,
     int16_t focusY = lerpInt16(heroFocusY, endFocusY, eased);
     uint16_t zoomQ8 =
         lerpQ8(CLOSEUP_HOLD_ZOOM_Q8, CLOSEUP_START_ZOOM_Q8, eased);
-    drawCloseupMaze(maze, focusX, focusY, zoomQ8, width, height);
+    drawCloseupMaze(maze, fog, focusX, focusY, zoomQ8, width, height);
     int16_t heroCol =
         worldToScreen(heroFocusX, focusX, zoomQ8, (int16_t)width - 1);
     int16_t heroRow =
@@ -406,7 +411,8 @@ void Renderer::renderIntro(const Maze &maze, const Camera &camera, Coord hero,
   endFrame();
 }
 
-void Renderer::renderVictory(const Maze &maze, const Camera &camera, Coord hero,
+void Renderer::renderVictory(const Maze &maze, const FogOfWar &fog,
+                             const Camera &camera, Coord hero,
                              unsigned long elapsedMs, uint8_t frame) const {
   (void)frame;
   uint16_t width = viewWidth();
@@ -425,21 +431,21 @@ void Renderer::renderVictory(const Maze &maze, const Camera &camera, Coord hero,
     focusY = lerpInt16(startFocusY, heroFocusY, eased);
     uint16_t zoomQ8 =
         lerpQ8(CLOSEUP_START_ZOOM_Q8, CLOSEUP_HOLD_ZOOM_Q8, eased);
-    drawCloseupMaze(maze, focusX, focusY, zoomQ8, width, height);
+    drawCloseupMaze(maze, fog, focusX, focusY, zoomQ8, width, height);
     int16_t heroCol =
         worldToScreen(heroFocusX, focusX, zoomQ8, (int16_t)width - 1);
     int16_t heroRow =
         worldToScreen(heroFocusY, focusY, zoomQ8, (int16_t)height - 1);
     drawHeroAtScreen(heroCol, heroRow);
   } else if (elapsedMs < VICTORY_ZOOM_IN_MS + VICTORY_HOLD_MS) {
-    drawCloseupMaze(maze, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8, width,
-                    height);
+    drawCloseupMaze(maze, fog, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8,
+                    width, height);
     drawHeroFill(width, height, 1);
   } else {
     unsigned long exitElapsed =
         elapsedMs - VICTORY_ZOOM_IN_MS - VICTORY_HOLD_MS;
-    drawCloseupMaze(maze, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8, width,
-                    height);
+    drawCloseupMaze(maze, fog, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8,
+                    width, height);
     drawExitingHero(maze, hero, width, height,
                     progressQ8(exitElapsed, VICTORY_EXIT_MS));
   }

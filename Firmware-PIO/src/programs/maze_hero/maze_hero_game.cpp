@@ -61,8 +61,7 @@ void startNewMaze(const ProgramConfig &cfg) {
   game.lastRenderMs = now;
   game.introStartMs = now;
   game.victoryStartMs = 0;
-  Display.displayClear();
-  game.renderer.renderIntro(game.maze, game.camera, game.hero, 0,
+  game.renderer.renderIntro(game.maze, game.fog, game.camera, game.hero, 0,
                             game.frame++);
 }
 
@@ -77,8 +76,8 @@ void tickIntro(unsigned long now) {
 
   if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
     game.lastRenderMs = now;
-    game.renderer.renderIntro(game.maze, game.camera, game.hero, elapsedMs,
-                              game.frame++);
+    game.renderer.renderIntro(game.maze, game.fog, game.camera, game.hero,
+                              elapsedMs, game.frame++);
   }
 }
 
@@ -121,8 +120,8 @@ void tickVictory(const ProgramConfig &cfg, unsigned long now) {
 
   if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
     game.lastRenderMs = now;
-    game.renderer.renderVictory(game.maze, game.camera, game.hero, elapsedMs,
-                                game.frame++);
+    game.renderer.renderVictory(game.maze, game.fog, game.camera, game.hero,
+                                elapsedMs, game.frame++);
   }
 }
 

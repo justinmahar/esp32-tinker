@@ -7,9 +7,11 @@
 
 namespace MazeHero {
 
+constexpr unsigned long INTRO_PAUSE_MS = 450UL;
 constexpr unsigned long INTRO_ENTER_MS = 900UL;
 constexpr unsigned long INTRO_ZOOM_OUT_MS = 1000UL;
-constexpr unsigned long INTRO_TOTAL_MS = INTRO_ENTER_MS + INTRO_ZOOM_OUT_MS;
+constexpr unsigned long INTRO_TOTAL_MS =
+    INTRO_PAUSE_MS + INTRO_ENTER_MS + INTRO_ZOOM_OUT_MS;
 
 constexpr unsigned long VICTORY_ZOOM_IN_MS = 1000UL;
 constexpr unsigned long VICTORY_HOLD_MS = 450UL;
@@ -24,10 +26,11 @@ public:
 
   void renderPlaying(const Maze &maze, const FogOfWar &fog,
                      const Camera &camera, Coord hero, uint8_t frame) const;
-  void renderIntro(const Maze &maze, const Camera &camera, Coord hero,
-                   unsigned long elapsedMs, uint8_t frame) const;
-  void renderVictory(const Maze &maze, const Camera &camera, Coord hero,
-                     unsigned long elapsedMs, uint8_t frame) const;
+  void renderIntro(const Maze &maze, const FogOfWar &fog, const Camera &camera,
+                   Coord hero, unsigned long elapsedMs, uint8_t frame) const;
+  void renderVictory(const Maze &maze, const FogOfWar &fog,
+                     const Camera &camera, Coord hero, unsigned long elapsedMs,
+                     uint8_t frame) const;
 };
 
 } // namespace MazeHero

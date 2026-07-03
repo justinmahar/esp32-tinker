@@ -21,7 +21,7 @@
 #define WIFI_TIMEOUT_MS 15000
 #define WOKWI_SETUP_TIMEOUT_MS 8000
 
-const bool ENABLE_WOKWI_SETUP = true;
+const bool ENABLE_WOKWI_SETUP = false;
 
 const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
 const unsigned int DEFAULT_FIREWORKS_MIN_LAUNCH_DELAY_MS = 60;
@@ -34,7 +34,7 @@ const unsigned int DEFAULT_MAZE_MIN_WIDTH = 8;
 const unsigned int DEFAULT_MAZE_MAX_WIDTH = 40;
 const unsigned int DEFAULT_MAZE_MIN_HEIGHT = 4;
 const unsigned int DEFAULT_MAZE_MAX_HEIGHT = 24;
-const unsigned int DEFAULT_MAZE_HERO_MIN_SPEED_MS = 150;
+const unsigned int DEFAULT_MAZE_HERO_MIN_SPEED_MS = 200;
 const unsigned int DEFAULT_MAZE_HERO_MAX_SPEED_MS = 200;
 const uint8_t DEFAULT_DISPLAY_BRIGHTNESS = 0;
 const uint8_t DEFAULT_FIREWORKS_MAX_BRIGHTNESS = 15;
@@ -332,8 +332,9 @@ void handleSave() {
       return;
     }
     if (mazeMaxWidth < mazeMinWidth || mazeMaxHeight < mazeMinHeight) {
-      server.send(400, "text/plain",
-                  "Maze max width/height must be greater than or equal to min.");
+      server.send(
+          400, "text/plain",
+          "Maze max width/height must be greater than or equal to min.");
       return;
     }
     if (mazeMaxWidth > MAX_MAZE_WIDTH || mazeMaxHeight > MAX_MAZE_HEIGHT) {
@@ -558,8 +559,8 @@ bool connectToSavedWiFi() {
   Serial.println(WiFi.localIP());
   if (!ENABLE_WOKWI_SETUP) {
     showBootIpAddress(Display, WiFi.localIP());
+    programStart(buildProgramConfig());
   }
-  programStart(buildProgramConfig());
   return true;
 }
 
