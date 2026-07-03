@@ -5,6 +5,7 @@
 #include <IPAddress.h>
 #include <MD_Parola.h>
 
+void showBootVersion(MD_Parola &display);
 void showBootIpAddress(MD_Parola &display, const IPAddress &ipAddress);
 
 #endif

@@ -813,6 +813,7 @@ void setup() {
   Display.begin();
   Display.setIntensity(0);
   Display.setTextAlignment(PA_CENTER);
+  showBootVersion(Display);
 
   loadPrefs();
   applyDisplayBrightness();
