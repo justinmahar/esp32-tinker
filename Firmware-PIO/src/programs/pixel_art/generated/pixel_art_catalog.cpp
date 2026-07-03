@@ -442,6 +442,7 @@
 #include "p5_98.h"
 #include "p5_99.h"
 #include "p5_100.h"
+#include "sword.h"
 
 namespace PixelArt {
 
@@ -888,6 +889,7 @@ const Image IMAGE_LIST[] = {
     {P5_98_NAME, P5_98_HEIGHT, P5_98_ROWS},
     {P5_99_NAME, P5_99_HEIGHT, P5_99_ROWS},
     {P5_100_NAME, P5_100_HEIGHT, P5_100_ROWS},
+    {SWORD_NAME, SWORD_HEIGHT, SWORD_ROWS},
 };
 } // namespace
 
