@@ -325,10 +325,10 @@ void maybeStartRunnerZoom(unsigned long now) {
 
 void startVictory(unsigned long now) {
   PlayZoomFrame zoomFrame = currentRunnerZoomFrame(now);
-  game.victoryStartView =
-      game.renderer.playZoomView(game.maze, game.camera,
-                                 worldQ8(game.heroWorldX),
-                                 worldQ8(game.heroWorldY), zoomFrame);
+  HeroRenderPosition heroRender = currentHeroRenderPosition(now);
+  CameraRenderPosition cameraRender = game.camera.renderPosition(now);
+  game.victoryStartView = game.renderer.playZoomView(
+      game.maze, cameraRender, heroRender.xQ8, heroRender.yQ8, zoomFrame);
   resetRunnerZoom(now);
   game.state = GameState::VictoryAnimation;
   game.victoryStartMs = now;
@@ -357,11 +357,9 @@ void startNewMaze(const ProgramConfig &cfg) {
   game.camera.reset(game.maze, game.renderer.viewWidth(),
                     game.renderer.viewHeight(), game.hero);
   resetRunnerZoom(now);
-  game.victoryStartView =
-      game.renderer.playZoomView(game.maze, game.camera,
-                                 worldQ8(game.heroWorldX),
-                                 worldQ8(game.heroWorldY),
-                                 currentRunnerZoomFrame(now));
+  game.victoryStartView = game.renderer.playZoomView(
+      game.maze, game.camera.renderPosition(now), worldQ8(game.heroWorldX),
+      worldQ8(game.heroWorldY), currentRunnerZoomFrame(now));
   game.state = GameState::IntroAnimation;
   game.movementPhase = MovementPhase::IdleAtCell;
   game.frame = 0;
@@ -408,6 +406,7 @@ void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
     if (game.movementPhase == MovementPhase::CrossingPassage) {
       unsigned long nextMoveDelayMs = nextHeroMoveDelayMs(cfg, now);
       stepHeroTowardPendingCell(now, nextMoveDelayMs);
+      game.camera.stepTowardTarget(now, nextMoveDelayMs);
       resetMoveTimer(now, nextMoveDelayMs);
       if (heroAtPendingCellCenter()) {
         completeCellArrival();
@@ -420,23 +419,23 @@ void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
         game.pendingHero = next;
         game.movementPhase = MovementPhase::CrossingPassage;
         unsigned long nextMoveDelayMs = nextHeroMoveDelayMs(cfg, now);
-        stepHeroTowardPendingCell(now, nextMoveDelayMs);
-        resetMoveTimer(now, nextMoveDelayMs);
         // Follow the committed destination while AI/fog remain cell-boundary
         // driven until the visible hero reaches the next cell center.
         game.camera.updateTarget(game.maze, game.renderer.viewWidth(),
                                  game.renderer.viewHeight(), game.pendingHero);
+        stepHeroTowardPendingCell(now, nextMoveDelayMs);
+        game.camera.stepTowardTarget(now, nextMoveDelayMs);
+        resetMoveTimer(now, nextMoveDelayMs);
       }
     }
   }
 
   if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
     game.lastRenderMs = now;
-    game.camera.stepTowardTarget();
     PlayZoomFrame zoomFrame = currentRunnerZoomFrame(now);
     HeroRenderPosition heroRender = currentHeroRenderPosition(now);
-    game.renderer.renderPlaying(game.maze, game.fog, game.camera,
-                                game.heroWorldX, game.heroWorldY,
+    CameraRenderPosition cameraRender = game.camera.renderPosition(now);
+    game.renderer.renderPlaying(game.maze, game.fog, cameraRender,
                                 heroRender.xQ8, heroRender.yQ8, zoomFrame,
                                 game.frame++);
   }

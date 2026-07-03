@@ -7,6 +7,19 @@ namespace {
 
 constexpr uint8_t HERO_VIEW_PADDING_PX = 2;
 
+int32_t worldQ8(int16_t value) { return (int32_t)value * 256L; }
+
+uint8_t progressQ8(unsigned long elapsedMs, unsigned long durationMs) {
+  if (durationMs == 0 || elapsedMs >= durationMs) {
+    return 255;
+  }
+  return (uint8_t)((elapsedMs * 255UL) / durationMs);
+}
+
+int32_t lerpWorldQ8(int16_t from, int16_t to, uint8_t progress) {
+  return worldQ8(from) + ((int32_t)(to - from) * 256L * progress) / 255L;
+}
+
 } // namespace
 
 void Camera::reset(const Maze &maze, uint16_t viewWidth, uint8_t viewHeight,
@@ -18,6 +31,13 @@ void Camera::reset(const Maze &maze, uint16_t viewWidth, uint8_t viewHeight,
   updateTarget(maze, viewWidth, viewHeight, hero);
   offsetX = targetX;
   offsetY = targetY;
+  renderStartX = offsetX;
+  renderStartY = offsetY;
+  renderEndX = offsetX;
+  renderEndY = offsetY;
+  renderStartMs = 0;
+  renderDurationMs = 1;
+  renderActive = false;
 }
 
 void Camera::updateTarget(const Maze &maze, uint16_t viewWidth,
@@ -47,13 +67,37 @@ void Camera::updateTarget(const Maze &maze, uint16_t viewWidth,
   targetY = clampY(maze, viewHeight, targetY);
 }
 
-bool Camera::stepTowardTarget() {
+bool Camera::stepTowardTarget(unsigned long now, unsigned long durationMs) {
+  int16_t startX = offsetX;
+  int16_t startY = offsetY;
   int16_t nextX = approachOnePixel(offsetX, targetX);
   int16_t nextY = approachOnePixel(offsetY, targetY);
   bool changed = nextX != offsetX || nextY != offsetY;
   offsetX = nextX;
   offsetY = nextY;
+  renderStartX = startX;
+  renderStartY = startY;
+  renderEndX = nextX;
+  renderEndY = nextY;
+  renderStartMs = now;
+  renderDurationMs = durationMs > 0 ? durationMs : 1UL;
+  renderActive = changed;
   return changed;
+}
+
+CameraRenderPosition Camera::renderPosition(unsigned long now) const {
+  if (!renderActive) {
+    return {worldQ8(offsetX), worldQ8(offsetY)};
+  }
+
+  unsigned long elapsedMs = now - renderStartMs;
+  if (elapsedMs >= renderDurationMs) {
+    return {worldQ8(renderEndX), worldQ8(renderEndY)};
+  }
+
+  uint8_t progress = progressQ8(elapsedMs, renderDurationMs);
+  return {lerpWorldQ8(renderStartX, renderEndX, progress),
+          lerpWorldQ8(renderStartY, renderEndY, progress)};
 }
 
 int16_t Camera::clampX(const Maze &maze, uint16_t viewWidth,
