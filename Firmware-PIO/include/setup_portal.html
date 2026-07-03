@@ -501,6 +501,78 @@
             <div class="hint">Milliseconds between animation frames.</div>
           </div>
         </div>
+        <div id="maze-hero-config" class="program-config" hidden>
+          <div>
+            <label>Min maze width</label>
+            <input
+              type="number"
+              id="maze-min-width"
+              min="4"
+              max="80"
+              step="1"
+              value="MAZE_MIN_WIDTH_PLACEHOLDER"
+            />
+          </div>
+          <div>
+            <label>Max maze width</label>
+            <input
+              type="number"
+              id="maze-max-width"
+              min="4"
+              max="80"
+              step="1"
+              value="MAZE_MAX_WIDTH_PLACEHOLDER"
+            />
+          </div>
+          <div>
+            <label>Min maze height</label>
+            <input
+              type="number"
+              id="maze-min-height"
+              min="4"
+              max="48"
+              step="1"
+              value="MAZE_MIN_HEIGHT_PLACEHOLDER"
+            />
+          </div>
+          <div>
+            <label>Max maze height</label>
+            <input
+              type="number"
+              id="maze-max-height"
+              min="4"
+              max="48"
+              step="1"
+              value="MAZE_MAX_HEIGHT_PLACEHOLDER"
+            />
+            <div class="hint">
+              A random size is picked between min and max for each maze.
+            </div>
+          </div>
+          <div>
+            <label>Min hero speed (ms)</label>
+            <input
+              type="number"
+              id="maze-hero-min-speed"
+              min="1"
+              step="1"
+              value="MAZE_HERO_MIN_SPEED_PLACEHOLDER"
+            />
+          </div>
+          <div>
+            <label>Max hero speed (ms)</label>
+            <input
+              type="number"
+              id="maze-hero-max-speed"
+              min="1"
+              step="1"
+              value="MAZE_HERO_MAX_SPEED_PLACEHOLDER"
+            />
+            <div class="hint">
+              Each hero move picks a random delay between min and max.
+            </div>
+          </div>
+        </div>
         <div class="divider"></div>
         <div class="section">Display</div>
         <div>
@@ -560,6 +632,8 @@
           program !== "scroller";
         document.getElementById("fireworks-config").hidden =
           program !== "fireworks";
+        document.getElementById("maze-hero-config").hidden =
+          program !== "maze_hero";
         document.getElementById("fireworks-brightness-config").hidden =
           program !== "fireworks";
         document.getElementById("brightness-label").textContent =
@@ -584,6 +658,16 @@
                 .value,
               fireworksAnimMs:
                 document.getElementById("fireworks-anim-ms").value,
+              mazeMinWidth: document.getElementById("maze-min-width").value,
+              mazeMaxWidth: document.getElementById("maze-max-width").value,
+              mazeMinHeight: document.getElementById("maze-min-height").value,
+              mazeMaxHeight: document.getElementById("maze-max-height").value,
+              mazeHeroMinSpeed: document.getElementById(
+                "maze-hero-min-speed",
+              ).value,
+              mazeHeroMaxSpeed: document.getElementById(
+                "maze-hero-max-speed",
+              ).value,
               brightness: document.getElementById("brightness").value,
               fireworksMaxBrightness: document.getElementById(
                 "fireworks-max-brightness",
@@ -616,6 +700,26 @@
           if (d.fireworksAnimMs != null)
             document.getElementById("fireworks-anim-ms").value =
               d.fireworksAnimMs;
+          if (d.mazeMinWidth != null)
+            document.getElementById("maze-min-width").value = d.mazeMinWidth;
+          if (d.mazeMaxWidth != null)
+            document.getElementById("maze-max-width").value = d.mazeMaxWidth;
+          if (d.mazeMinHeight != null)
+            document.getElementById("maze-min-height").value = d.mazeMinHeight;
+          if (d.mazeMaxHeight != null)
+            document.getElementById("maze-max-height").value = d.mazeMaxHeight;
+          if (d.mazeHeroMinSpeed != null)
+            document.getElementById("maze-hero-min-speed").value =
+              d.mazeHeroMinSpeed;
+          if (d.mazeHeroMaxSpeed != null)
+            document.getElementById("maze-hero-max-speed").value =
+              d.mazeHeroMaxSpeed;
+          if (d.mazeHeroSpeed != null && d.mazeHeroMinSpeed == null)
+            document.getElementById("maze-hero-min-speed").value =
+              d.mazeHeroSpeed;
+          if (d.mazeHeroSpeed != null && d.mazeHeroMaxSpeed == null)
+            document.getElementById("maze-hero-max-speed").value =
+              d.mazeHeroSpeed;
           if (d.brightness != null)
             document.getElementById("brightness").value = d.brightness;
           if (d.fireworksMaxBrightness != null)
@@ -632,6 +736,12 @@
           "fireworks-min-delay",
           "fireworks-max-delay",
           "fireworks-anim-ms",
+          "maze-min-width",
+          "maze-max-width",
+          "maze-min-height",
+          "maze-max-height",
+          "maze-hero-min-speed",
+          "maze-hero-max-speed",
           "brightness",
           "fireworks-max-brightness",
         ].forEach(function (id) {
@@ -744,6 +854,30 @@
           document.getElementById("fireworks-anim-ms").value,
           10,
         );
+        var mazeMinWidth = parseInt(
+          document.getElementById("maze-min-width").value,
+          10,
+        );
+        var mazeMaxWidth = parseInt(
+          document.getElementById("maze-max-width").value,
+          10,
+        );
+        var mazeMinHeight = parseInt(
+          document.getElementById("maze-min-height").value,
+          10,
+        );
+        var mazeMaxHeight = parseInt(
+          document.getElementById("maze-max-height").value,
+          10,
+        );
+        var mazeHeroMinSpeed = parseInt(
+          document.getElementById("maze-hero-min-speed").value,
+          10,
+        );
+        var mazeHeroMaxSpeed = parseInt(
+          document.getElementById("maze-hero-max-speed").value,
+          10,
+        );
         var brightness = parseInt(
           document.getElementById("brightness").value,
           10,
@@ -795,6 +929,43 @@
             msg.textContent = "Max brightness must be min brightness to 15.";
             return;
           }
+        } else if (program === "maze_hero") {
+          if (
+            !mazeMinWidth ||
+            !mazeMinHeight ||
+            mazeMinWidth < 4 ||
+            mazeMinHeight < 4
+          ) {
+            msg.className = "msg err";
+            msg.textContent = "Maze minimum size must be at least 4x4.";
+            return;
+          }
+          if (
+            !mazeMaxWidth ||
+            !mazeMaxHeight ||
+            mazeMaxWidth < mazeMinWidth ||
+            mazeMaxHeight < mazeMinHeight
+          ) {
+            msg.className = "msg err";
+            msg.textContent = "Maze max size must be at least the min size.";
+            return;
+          }
+          if (mazeMaxWidth > 80 || mazeMaxHeight > 48) {
+            msg.className = "msg err";
+            msg.textContent = "Maze max size is 80x48.";
+            return;
+          }
+          if (!mazeHeroMinSpeed || mazeHeroMinSpeed <= 0) {
+            msg.className = "msg err";
+            msg.textContent = "Hero min speed must be greater than 0.";
+            return;
+          }
+          if (!mazeHeroMaxSpeed || mazeHeroMaxSpeed < mazeHeroMinSpeed) {
+            msg.className = "msg err";
+            msg.textContent =
+              "Hero max speed must be greater than or equal to min.";
+            return;
+          }
         }
         persistSetupForm();
         msg.className = "msg ok";
@@ -816,6 +987,18 @@
           fireworksMaxDelay +
           "&fireworksAnimMs=" +
           fireworksAnimMs +
+          "&mazeMinWidth=" +
+          mazeMinWidth +
+          "&mazeMaxWidth=" +
+          mazeMaxWidth +
+          "&mazeMinHeight=" +
+          mazeMinHeight +
+          "&mazeMaxHeight=" +
+          mazeMaxHeight +
+          "&mazeHeroMinSpeed=" +
+          mazeHeroMinSpeed +
+          "&mazeHeroMaxSpeed=" +
+          mazeHeroMaxSpeed +
           "&brightness=" +
           brightness +
           "&fireworksMaxBrightness=" +

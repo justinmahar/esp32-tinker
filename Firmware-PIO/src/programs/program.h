@@ -16,6 +16,12 @@ struct ProgramConfig {
   unsigned int fireworksMinLaunchDelayMs;
   unsigned int fireworksMaxLaunchDelayMs;
   unsigned int fireworksAnimSpeedMs;
+  unsigned int mazeMinWidth;
+  unsigned int mazeMaxWidth;
+  unsigned int mazeMinHeight;
+  unsigned int mazeMaxHeight;
+  unsigned int mazeHeroMinSpeedMs;
+  unsigned int mazeHeroMaxSpeedMs;
   uint8_t brightness;
   uint8_t fireworksMaxBrightness;
 };

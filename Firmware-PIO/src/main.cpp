@@ -27,6 +27,15 @@ const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
 const unsigned int DEFAULT_FIREWORKS_MIN_LAUNCH_DELAY_MS = 60;
 const unsigned int DEFAULT_FIREWORKS_MAX_LAUNCH_DELAY_MS = 2000;
 const unsigned int DEFAULT_FIREWORKS_ANIM_SPEED_MS = 60;
+const unsigned int MIN_MAZE_DIMENSION = 4;
+const unsigned int MAX_MAZE_WIDTH = 80;
+const unsigned int MAX_MAZE_HEIGHT = 48;
+const unsigned int DEFAULT_MAZE_MIN_WIDTH = 8;
+const unsigned int DEFAULT_MAZE_MAX_WIDTH = 40;
+const unsigned int DEFAULT_MAZE_MIN_HEIGHT = 4;
+const unsigned int DEFAULT_MAZE_MAX_HEIGHT = 24;
+const unsigned int DEFAULT_MAZE_HERO_MIN_SPEED_MS = 150;
+const unsigned int DEFAULT_MAZE_HERO_MAX_SPEED_MS = 200;
 const uint8_t DEFAULT_DISPLAY_BRIGHTNESS = 0;
 const uint8_t DEFAULT_FIREWORKS_MAX_BRIGHTNESS = 15;
 
@@ -87,6 +96,39 @@ void loadPrefs() {
   if (programConfig.fireworksAnimSpeedMs == 0) {
     programConfig.fireworksAnimSpeedMs = DEFAULT_FIREWORKS_ANIM_SPEED_MS;
   }
+  programConfig.mazeMinWidth = prefs.getUInt("mzMinW", 0);
+  if (programConfig.mazeMinWidth < MIN_MAZE_DIMENSION) {
+    programConfig.mazeMinWidth = DEFAULT_MAZE_MIN_WIDTH;
+  }
+  programConfig.mazeMaxWidth = prefs.getUInt("mzMaxW", 0);
+  if (programConfig.mazeMaxWidth < programConfig.mazeMinWidth) {
+    programConfig.mazeMaxWidth = DEFAULT_MAZE_MAX_WIDTH;
+  }
+  if (programConfig.mazeMaxWidth < programConfig.mazeMinWidth) {
+    programConfig.mazeMaxWidth = programConfig.mazeMinWidth;
+  }
+  programConfig.mazeMinHeight = prefs.getUInt("mzMinH", 0);
+  if (programConfig.mazeMinHeight < MIN_MAZE_DIMENSION) {
+    programConfig.mazeMinHeight = DEFAULT_MAZE_MIN_HEIGHT;
+  }
+  programConfig.mazeMaxHeight = prefs.getUInt("mzMaxH", 0);
+  if (programConfig.mazeMaxHeight < programConfig.mazeMinHeight) {
+    programConfig.mazeMaxHeight = DEFAULT_MAZE_MAX_HEIGHT;
+  }
+  if (programConfig.mazeMaxHeight < programConfig.mazeMinHeight) {
+    programConfig.mazeMaxHeight = programConfig.mazeMinHeight;
+  }
+  programConfig.mazeHeroMinSpeedMs = prefs.getUInt("mzHeroMinMs", 0);
+  if (programConfig.mazeHeroMinSpeedMs == 0) {
+    programConfig.mazeHeroMinSpeedMs = DEFAULT_MAZE_HERO_MIN_SPEED_MS;
+  }
+  programConfig.mazeHeroMaxSpeedMs = prefs.getUInt("mzHeroMaxMs", 0);
+  if (programConfig.mazeHeroMaxSpeedMs < programConfig.mazeHeroMinSpeedMs) {
+    programConfig.mazeHeroMaxSpeedMs = DEFAULT_MAZE_HERO_MAX_SPEED_MS;
+  }
+  if (programConfig.mazeHeroMaxSpeedMs < programConfig.mazeHeroMinSpeedMs) {
+    programConfig.mazeHeroMaxSpeedMs = programConfig.mazeHeroMinSpeedMs;
+  }
   programConfig.brightness =
       prefs.getUChar("brightness", DEFAULT_DISPLAY_BRIGHTNESS);
   programConfig.fireworksMaxBrightness =
@@ -119,6 +161,18 @@ void loadPrefs() {
   Serial.print(programConfig.fireworksMaxLaunchDelayMs);
   Serial.print(", fwAnimMs=");
   Serial.print(programConfig.fireworksAnimSpeedMs);
+  Serial.print(", mazeWidth=");
+  Serial.print(programConfig.mazeMinWidth);
+  Serial.print("-");
+  Serial.print(programConfig.mazeMaxWidth);
+  Serial.print(", mazeHeight=");
+  Serial.print(programConfig.mazeMinHeight);
+  Serial.print("-");
+  Serial.print(programConfig.mazeMaxHeight);
+  Serial.print(", mazeHeroMs=");
+  Serial.print(programConfig.mazeHeroMinSpeedMs);
+  Serial.print("-");
+  Serial.print(programConfig.mazeHeroMaxSpeedMs);
   Serial.print(", brightness=");
   Serial.print(programConfig.brightness);
   Serial.print(", fwMaxBright=");
@@ -136,6 +190,12 @@ void savePrefs(const String &ssid, const String &pass,
   prefs.putUInt("fwMinDelayMs", cfg.fireworksMinLaunchDelayMs);
   prefs.putUInt("fwMaxDelayMs", cfg.fireworksMaxLaunchDelayMs);
   prefs.putUInt("fwAnimMs", cfg.fireworksAnimSpeedMs);
+  prefs.putUInt("mzMinW", cfg.mazeMinWidth);
+  prefs.putUInt("mzMaxW", cfg.mazeMaxWidth);
+  prefs.putUInt("mzMinH", cfg.mazeMinHeight);
+  prefs.putUInt("mzMaxH", cfg.mazeMaxHeight);
+  prefs.putUInt("mzHeroMinMs", cfg.mazeHeroMinSpeedMs);
+  prefs.putUInt("mzHeroMaxMs", cfg.mazeHeroMaxSpeedMs);
   prefs.putUChar("brightness", cfg.brightness);
   prefs.putUChar("fwMaxBright", cfg.fireworksMaxBrightness);
   prefs.end();
@@ -169,6 +229,18 @@ String buildPage() {
                String(programConfig.fireworksMaxLaunchDelayMs));
   page.replace("FW_ANIM_MS_PLACEHOLDER",
                String(programConfig.fireworksAnimSpeedMs));
+  page.replace("MAZE_MIN_WIDTH_PLACEHOLDER",
+               String(programConfig.mazeMinWidth));
+  page.replace("MAZE_MAX_WIDTH_PLACEHOLDER",
+               String(programConfig.mazeMaxWidth));
+  page.replace("MAZE_MIN_HEIGHT_PLACEHOLDER",
+               String(programConfig.mazeMinHeight));
+  page.replace("MAZE_MAX_HEIGHT_PLACEHOLDER",
+               String(programConfig.mazeMaxHeight));
+  page.replace("MAZE_HERO_MIN_SPEED_PLACEHOLDER",
+               String(programConfig.mazeHeroMinSpeedMs));
+  page.replace("MAZE_HERO_MAX_SPEED_PLACEHOLDER",
+               String(programConfig.mazeHeroMaxSpeedMs));
   page.replace("MIN_BRIGHTNESS_PLACEHOLDER", String(programConfig.brightness));
   page.replace("MAX_BRIGHTNESS_PLACEHOLDER",
                String(programConfig.fireworksMaxBrightness));
@@ -246,6 +318,44 @@ void handleSave() {
     newConfig.fireworksMaxLaunchDelayMs = fireworksMaxLaunchDelayMs;
     newConfig.fireworksAnimSpeedMs = fireworksAnimSpeedMs;
     newConfig.fireworksMaxBrightness = (uint8_t)fireworksMaxBrightness;
+  } else if (newConfig.program == ProgramId::MazeHero) {
+    unsigned int mazeMinWidth = server.arg("mazeMinWidth").toInt();
+    unsigned int mazeMaxWidth = server.arg("mazeMaxWidth").toInt();
+    unsigned int mazeMinHeight = server.arg("mazeMinHeight").toInt();
+    unsigned int mazeMaxHeight = server.arg("mazeMaxHeight").toInt();
+    unsigned int mazeHeroMinSpeedMs = server.arg("mazeHeroMinSpeed").toInt();
+    unsigned int mazeHeroMaxSpeedMs = server.arg("mazeHeroMaxSpeed").toInt();
+
+    if (mazeMinWidth < MIN_MAZE_DIMENSION ||
+        mazeMinHeight < MIN_MAZE_DIMENSION) {
+      server.send(400, "text/plain", "Maze minimum size must be at least 4x4.");
+      return;
+    }
+    if (mazeMaxWidth < mazeMinWidth || mazeMaxHeight < mazeMinHeight) {
+      server.send(400, "text/plain",
+                  "Maze max width/height must be greater than or equal to min.");
+      return;
+    }
+    if (mazeMaxWidth > MAX_MAZE_WIDTH || mazeMaxHeight > MAX_MAZE_HEIGHT) {
+      server.send(400, "text/plain", "Maze max size is 80x48.");
+      return;
+    }
+    if (mazeHeroMinSpeedMs <= 0) {
+      server.send(400, "text/plain", "Hero min speed must be greater than 0.");
+      return;
+    }
+    if (mazeHeroMaxSpeedMs < mazeHeroMinSpeedMs) {
+      server.send(400, "text/plain",
+                  "Hero max speed must be greater than or equal to min.");
+      return;
+    }
+
+    newConfig.mazeMinWidth = mazeMinWidth;
+    newConfig.mazeMaxWidth = mazeMaxWidth;
+    newConfig.mazeMinHeight = mazeMinHeight;
+    newConfig.mazeMaxHeight = mazeMaxHeight;
+    newConfig.mazeHeroMinSpeedMs = mazeHeroMinSpeedMs;
+    newConfig.mazeHeroMaxSpeedMs = mazeHeroMaxSpeedMs;
   }
 
   String new_ssid = server.arg("ssid");
@@ -446,7 +556,9 @@ bool connectToSavedWiFi() {
   Serial.println("");
   Serial.print("Connected! IP: ");
   Serial.println(WiFi.localIP());
-  showBootIpAddress(Display, WiFi.localIP());
+  if (!ENABLE_WOKWI_SETUP) {
+    showBootIpAddress(Display, WiFi.localIP());
+  }
   programStart(buildProgramConfig());
   return true;
 }

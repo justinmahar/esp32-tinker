@@ -1,0 +1,27 @@
+#pragma once
+
+#include "camera.h"
+#include "fog_of_war.h"
+#include "maze.h"
+#include "types.h"
+
+namespace MazeHero {
+
+constexpr unsigned long VICTORY_ZOOM_IN_MS = 1000UL;
+constexpr unsigned long VICTORY_HOLD_MS = 450UL;
+constexpr unsigned long VICTORY_EXIT_MS = 1100UL;
+constexpr unsigned long VICTORY_TOTAL_MS =
+    VICTORY_ZOOM_IN_MS + VICTORY_HOLD_MS + VICTORY_EXIT_MS;
+
+class Renderer {
+public:
+  uint16_t viewWidth() const;
+  uint8_t viewHeight() const { return DISPLAY_HEIGHT; }
+
+  void renderPlaying(const Maze &maze, const FogOfWar &fog,
+                     const Camera &camera, Coord hero, uint8_t frame) const;
+  void renderVictory(const Maze &maze, const Camera &camera, Coord hero,
+                     unsigned long elapsedMs, uint8_t frame) const;
+};
+
+} // namespace MazeHero
