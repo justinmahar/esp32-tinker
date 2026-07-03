@@ -3,6 +3,7 @@
 #include "generated/pixel_art_catalog.h"
 
 #include <MD_MAX72xx.h>
+#include <esp_system.h>
 #include <pgmspace.h>
 
 namespace PixelArt {
@@ -28,6 +29,7 @@ enum class Phase : uint8_t {
 
 struct State {
   size_t imageIndex = 0;
+  bool seeded = false;
   uint16_t topRow = 0;
   unsigned long lastStepMs = 0;
   unsigned long holdStartMs = 0;
@@ -44,6 +46,18 @@ uint8_t sanitizedBrightness(uint8_t brightness) {
 }
 
 const Image &currentImage() { return IMAGES[state.imageIndex]; }
+
+size_t randomImageIndex() {
+  if (IMAGE_COUNT <= 1) {
+    return 0;
+  }
+
+  size_t nextIndex = random(static_cast<long>(IMAGE_COUNT - 1));
+  if (nextIndex >= state.imageIndex) {
+    nextIndex++;
+  }
+  return nextIndex;
+}
 
 uint16_t maxTopRow(const Image &image) {
   return image.height > DISPLAY_HEIGHT ? image.height - DISPLAY_HEIGHT : 0;
@@ -99,7 +113,7 @@ void startImage(unsigned long now) {
 }
 
 void advanceToNextImage(unsigned long now) {
-  state.imageIndex = (state.imageIndex + 1) % IMAGE_COUNT;
+  state.imageIndex = randomImageIndex();
   startImage(now);
 }
 
@@ -228,7 +242,12 @@ void start(const ProgramConfig &cfg) {
     return;
   }
 
-  state.imageIndex = 0;
+  if (!state.seeded) {
+    randomSeed(esp_random());
+    state.seeded = true;
+  }
+
+  state.imageIndex = random(static_cast<long>(IMAGE_COUNT));
   startImage(millis());
 }
 
