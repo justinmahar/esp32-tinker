@@ -7,6 +7,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 
+#include "app_version.h"
 #include "boot_network_display.h"
 #include "programs/program.h"
 #include "programs/transitions.h"
@@ -22,7 +23,11 @@
 #define WIFI_TIMEOUT_MS 15000
 #define WOKWI_SETUP_TIMEOUT_MS 8000
 
-const bool ENABLE_WOKWI_SETUP = false;
+#ifdef WOKWI_SIM
+const bool RUNNING_IN_WOKWI = true;
+#else
+const bool RUNNING_IN_WOKWI = false;
+#endif
 
 const unsigned int DEFAULT_SCROLL_SPEED_MS = 75;
 const unsigned int DEFAULT_FIREWORKS_MIN_LAUNCH_DELAY_MS = 60;
@@ -795,7 +800,7 @@ bool connectToSavedWiFi() {
   Serial.println("");
   Serial.print("Connected! IP: ");
   Serial.println(WiFi.localIP());
-  if (!ENABLE_WOKWI_SETUP) {
+  if (!RUNNING_IN_WOKWI) {
     showBootIpAddress(Display, WiFi.localIP());
     startProgramScheduler(buildProgramConfig());
   }
@@ -816,12 +821,12 @@ void setup() {
     if (connectToSavedWiFi()) {
       registerRoutes();
       server.begin();
-    } else if (!ENABLE_WOKWI_SETUP || !startWokwiConfigPortal()) {
+    } else if (!RUNNING_IN_WOKWI || !startWokwiConfigPortal()) {
       startConfigPortal();
     }
   } else {
     Serial.println("No credentials. Starting config portal.");
-    if (!ENABLE_WOKWI_SETUP || !startWokwiConfigPortal()) {
+    if (!RUNNING_IN_WOKWI || !startWokwiConfigPortal()) {
       startConfigPortal();
     }
   }

@@ -108,6 +108,14 @@ Leave the Wi-Fi fields blank when saving and the device keeps the previously sto
 
 All firmware source lives in `Firmware-PIO/`. Open that folder as your Cursor/VS Code workspace when building, flashing, or simulating.
 
+The project version lives in `VERSION`. Increment it with:
+
+```bash
+./scripts/bump-version.sh           # patch bump
+./scripts/bump-version.sh --minor   # minor bump
+./scripts/bump-version.sh --major   # major bump
+```
+
 ### Build and flash (PlatformIO)
 
 ```bash
@@ -123,13 +131,13 @@ Simulate the ESP32 + 4-module MAX7219 matrix without hardware.
 **Requirements:** [PlatformIO](https://platformio.org/) and the [Wokwi for VS Code](https://marketplace.visualstudio.com/items?itemName=wokwi.wokwi-vscode) extension.
 
 1. Open **`Firmware-PIO`** as your workspace root (where `wokwi.toml` lives). If the workspace root is the repo folder instead, Wokwi will not load port forwarding.
-2. Build: `./scripts/build-firmware.sh` or `pio run`
+2. Build the simulator environment: `./scripts/build-firmware.sh -e wokwi` or `pio run -e wokwi`
 3. Start: `Cmd+Shift+P` → **Wokwi: Start Simulator**
 4. Keep the **simulator tab visible** — Wokwi pauses when you switch away.
 5. Open **`http://localhost:8180`** (not `https://`) in your browser to access the simulated setup portal.
 6. On first boot the firmware auto-connects to **`Wokwi-GUEST`** for simulator setup.
 
-For development, `ENABLE_WOKWI_SETUP` in `Firmware-PIO/src/main.cpp` is set to `true` so the firmware tries `Wokwi-GUEST` before starting the normal setup hotspot. Set it to `false` for hardware-only builds.
+The `wokwi` PlatformIO environment defines `WOKWI_SIM=1`, so the firmware tries `Wokwi-GUEST` before starting the normal setup hotspot. Hardware builds use the default `esp32dev` environment.
 
 If `localhost:8180` does not load:
 
@@ -142,22 +150,23 @@ If `localhost:8180` does not load:
 
 The [browser installer](https://justinmahar.github.io/esp32-tinker/) uses pre-built flash images in `docs/`, referenced by `docs/manifest.json`:
 
-| File                  | Source (after `pio run`)                          |
-| --------------------- | ------------------------------------------------- |
-| `docs/bootloader.bin` | `Firmware-PIO/.pio/build/esp32dev/bootloader.bin` |
-| `docs/partitions.bin` | `Firmware-PIO/.pio/build/esp32dev/partitions.bin` |
-| `docs/firmware.bin`   | `Firmware-PIO/.pio/build/esp32dev/firmware.bin`   |
+| File                         | Source (after `pio run`)                          |
+| ---------------------------- | ------------------------------------------------- |
+| `docs/bootloader.bin`        | `Firmware-PIO/.pio/build/esp32dev/bootloader.bin` |
+| `docs/partitions.bin`        | `Firmware-PIO/.pio/build/esp32dev/partitions.bin` |
+| `docs/firmware_VERSION.bin`  | `Firmware-PIO/.pio/build/esp32dev/firmware.bin`   |
 
 To refresh the web installer after firmware changes:
 
 ```bash
+./scripts/bump-version.sh
 ./scripts/build-firmware.sh
 ./scripts/update-web-installer.sh
 ```
 
-Then bump the `"version"` field in `docs/manifest.json` if you are publishing a release, commit the updated `docs/*.bin` files, and push so GitHub Pages serves the new build.
+`scripts/update-web-installer.sh` reads `VERSION`, copies the app binary to `docs/firmware_VERSION.bin`, and rewrites `docs/manifest.json` to reference that versioned firmware file. Commit `VERSION`, `docs/manifest.json`, and the updated `docs/*.bin` files, then push so GitHub Pages serves the new build.
 
-**Note:** OTA updates on a flashed device use `firmware.bin` only (the app partition). The browser installer flashes the full image (bootloader + partition table + app).
+**Note:** OTA updates on a flashed device use the app partition binary only. The browser installer flashes the full image (bootloader + partition table + app).
 
 Preview locally before publishing:
 

@@ -24,18 +24,27 @@ Refreshes the browser installer binaries in `docs/` after a successful build.
 - Copies from `Firmware-PIO/.pio/build/esp32dev/`:
   - `bootloader.bin`
   - `partitions.bin`
-  - `firmware.bin`
+- Copies `firmware.bin` to `docs/firmware_VERSION.bin`
+- Rewrites `docs/manifest.json` with the current `VERSION` and versioned firmware path
 - Requires a prior build; exits with an error if any file is missing
+
+## `scripts/bump-version.sh`
+
+Increments the root `VERSION` file.
+
+- Defaults to a patch bump when no flag is provided
+- Accepts `--major`, `--minor`, or `--patch`
+- Uses strict `MAJOR.MINOR.PATCH` semver
 
 Typical release workflow:
 
 ```bash
+./scripts/bump-version.sh
 ./scripts/build-firmware.sh
 ./scripts/update-web-installer.sh
-# Bump "version" in docs/manifest.json, then commit docs/
 ```
 
-The [browser installer](https://justinmahar.github.io/esp32-tinker/) (esp-web-tools) serves these files from GitHub Pages. OTA updates on a flashed device use `firmware.bin` only; the browser installer flashes the full image.
+The [browser installer](https://justinmahar.github.io/esp32-tinker/) (esp-web-tools) serves these files from GitHub Pages. OTA updates on a flashed device use the app partition binary only; the browser installer flashes the full image.
 
 ## `scripts/preview-installer.sh`
 
@@ -50,9 +59,7 @@ Use this to verify `docs/index.html`, `docs/manifest.json`, and the `.bin` files
 ## Deploy / Dev
 
 If users says to prepare to deploy, do the following:
-- Set ENABLE_WOKWI_SETUP to false
+- Run `./scripts/build-firmware.sh`
 
 If users says to go back to development mode, do the following:
-- Set ENABLE_WOKWI_SETUP to true
-
-Then run the build the firmware.
+- Run `./scripts/build-firmware.sh -e wokwi`
