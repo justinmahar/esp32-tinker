@@ -329,6 +329,18 @@ void drawExitingHero(const Maze &maze, Coord hero, uint16_t width,
              directionDy(dir) * travel);
 }
 
+void drawEnteringHero(const Maze &maze, Coord hero, uint16_t width,
+                      uint8_t height, uint8_t progress) {
+  Direction dir = exitDirection(maze, hero);
+  uint8_t eased = easeInOutQ8(progress);
+  int16_t enterDistance =
+      (dir == Direction::East || dir == Direction::West) ? width / 2 + 4
+                                                         : height / 2 + 3;
+  int16_t travel = ((int32_t)enterDistance * (255 - eased)) / 255;
+  drawHeroAt(width, height, directionDx(dir) * travel,
+             directionDy(dir) * travel);
+}
+
 } // namespace
 
 uint16_t Renderer::viewWidth() const { return matrix()->getColumnCount(); }
@@ -358,6 +370,39 @@ void Renderer::renderPlaying(const Maze &maze, const FogOfWar &fog,
   int16_t heroCol = screenX(maze, camera, cellCenterX(hero), width);
   setPixel(heroRow, heroCol);
 
+  endFrame();
+}
+
+void Renderer::renderIntro(const Maze &maze, const Camera &camera, Coord hero,
+                           unsigned long elapsedMs, uint8_t frame) const {
+  (void)frame;
+  uint16_t width = viewWidth();
+  uint8_t height = viewHeight();
+  int16_t heroFocusX = closeupCellCenterX(hero);
+  int16_t heroFocusY = closeupCellCenterY(hero);
+
+  beginFrame();
+  if (elapsedMs < INTRO_ENTER_MS) {
+    drawCloseupMaze(maze, heroFocusX, heroFocusY, CLOSEUP_HOLD_ZOOM_Q8, width,
+                    height);
+    drawEnteringHero(maze, hero, width, height,
+                     progressQ8(elapsedMs, INTRO_ENTER_MS));
+  } else {
+    unsigned long zoomElapsed = elapsedMs - INTRO_ENTER_MS;
+    uint8_t eased = easeInOutQ8(progressQ8(zoomElapsed, INTRO_ZOOM_OUT_MS));
+    int16_t endFocusX = playCameraFocusX(maze, camera, width);
+    int16_t endFocusY = playCameraFocusY(maze, camera, height);
+    int16_t focusX = lerpInt16(heroFocusX, endFocusX, eased);
+    int16_t focusY = lerpInt16(heroFocusY, endFocusY, eased);
+    uint16_t zoomQ8 =
+        lerpQ8(CLOSEUP_HOLD_ZOOM_Q8, CLOSEUP_START_ZOOM_Q8, eased);
+    drawCloseupMaze(maze, focusX, focusY, zoomQ8, width, height);
+    int16_t heroCol =
+        worldToScreen(heroFocusX, focusX, zoomQ8, (int16_t)width - 1);
+    int16_t heroRow =
+        worldToScreen(heroFocusY, focusY, zoomQ8, (int16_t)height - 1);
+    drawHeroAtScreen(heroCol, heroRow);
+  }
   endFrame();
 }
 

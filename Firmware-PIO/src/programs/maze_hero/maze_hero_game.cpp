@@ -13,7 +13,7 @@ namespace {
 
 constexpr unsigned long RENDER_FRAME_MS = 45UL;
 
-enum class GameState : uint8_t { Playing, VictoryAnimation };
+enum class GameState : uint8_t { IntroAnimation, Playing, VictoryAnimation };
 
 struct Game {
   Maze maze;
@@ -28,6 +28,7 @@ struct Game {
   unsigned long lastMoveMs = 0;
   unsigned long moveDelayMs = 1;
   unsigned long lastRenderMs = 0;
+  unsigned long introStartMs = 0;
   unsigned long victoryStartMs = 0;
 };
 
@@ -53,15 +54,32 @@ void startNewMaze(const ProgramConfig &cfg) {
   game.fog.revealFrom(game.maze, game.hero);
   game.camera.reset(game.maze, game.renderer.viewWidth(),
                     game.renderer.viewHeight(), game.hero);
-  game.state = GameState::Playing;
+  game.state = GameState::IntroAnimation;
   game.frame = 0;
   game.lastMoveMs = now;
   game.moveDelayMs = randomHeroSpeedMs(cfg);
   game.lastRenderMs = now;
+  game.introStartMs = now;
   game.victoryStartMs = 0;
   Display.displayClear();
-  game.renderer.renderPlaying(game.maze, game.fog, game.camera, game.hero,
+  game.renderer.renderIntro(game.maze, game.camera, game.hero, 0,
+                            game.frame++);
+}
+
+void tickIntro(unsigned long now) {
+  unsigned long elapsedMs = now - game.introStartMs;
+  if (elapsedMs >= INTRO_TOTAL_MS) {
+    game.state = GameState::Playing;
+    game.lastMoveMs = now;
+    game.lastRenderMs = 0;
+    return;
+  }
+
+  if (now - game.lastRenderMs >= RENDER_FRAME_MS) {
+    game.lastRenderMs = now;
+    game.renderer.renderIntro(game.maze, game.camera, game.hero, elapsedMs,
                               game.frame++);
+  }
 }
 
 void tickPlaying(const ProgramConfig &cfg, unsigned long now) {
@@ -123,6 +141,9 @@ void tick(const ProgramConfig &cfg) {
   unsigned long now = millis();
 
   switch (game.state) {
+  case GameState::IntroAnimation:
+    tickIntro(now);
+    break;
   case GameState::Playing:
     tickPlaying(cfg, now);
     break;
